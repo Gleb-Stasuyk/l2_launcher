@@ -6,3 +6,4 @@ keys/manifest_private.pem
 *.user
 .vs/
 upstream/
+__pycache__/
