@@ -24,7 +24,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private UserPrefs _prefs = new();
     private Manifest? _manifest;
     private CancellationTokenSource? _cts;
-    private bool _verified, _offline;
+    private readonly LauncherSession _session;
     public static Version CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0);
 
     public MainViewModel()
@@ -32,8 +32,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"L2Launcher/{CurrentVersion}");
         _svc = new UpdateService(_http);
-        PlayCommand = new RelayCommand(PlayAsync, () => !Busy && (_verified || _offline));
-        CheckCommand = new RelayCommand(() => UpdateAsync(full: true), () => !Busy);
+        _session = new LauncherSession(CheckCoreAsync, LaunchCoreAsync);
+        PlayCommand = new RelayCommand(() => RunBusy(ct => _session.PlayAsync(ct)), () => !Busy);
+        CheckCommand = new RelayCommand(() => RunBusy(ct => _session.CheckFilesAsync(ct)), () => !Busy);
         CancelCommand = new RelayCommand(() => { _cts?.Cancel(); return Task.CompletedTask; }, () => Busy);
         OpenFolderCommand = new RelayCommand(() => { OpenShell(_cfg.GamePath); return Task.CompletedTask; });
         WebsiteCommand = new RelayCommand(() => { OpenShell(_cfg.WebsiteUrl); return Task.CompletedTask; }, () => Settings.IsHttps(_cfg.WebsiteUrl));
@@ -103,8 +104,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             "ru" => true,
             "en" => false,
             // First start: take the language from Option.ini, else from Windows UI language.
-            _ => GameLanguageService.Read(_cfg.GamePath) is GameLanguage g
-                    ? g == GameLanguage.Russian
+            _ => LanguageService.ReadActive(_cfg.GamePath) is string a
+                    ? a == "ru"
                     : System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ru"
         };
         Loc.SetRussian(ru); On(nameof(IsRussian)); On(nameof(IsEnglish));
@@ -115,16 +116,26 @@ public sealed class MainViewModel : INotifyPropertyChanged
         foreach (var w in warnings) AddLog("WARN " + w);
         if (PathSafety.LooksLikeLineageClient(_cfg.GamePath) == false)
             AddLog("No system\\l2.exe in game path yet: a full download will be performed.");
-        await UpdateAsync(full: false);
+        // No automatic check at startup: files are checked on "Check files", or on "Play" if not yet checked this session.
+        Status = Loc["S_Idle"];
+        await Task.CompletedTask;
+    }
+
+    private async Task RunBusy(Func<CancellationToken, Task<bool>> action)
+    {
+        if (Busy) return;
+        Busy = true;
+        _cts = new CancellationTokenSource();
+        try { await action(_cts.Token); }
+        catch (OperationCanceledException) { Status = Loc["S_Cancelled"]; Detail = ""; }
+        catch (Exception ex) { AddLog("ERROR " + ex); Status = Loc.F("S_Error", ex.Message); }
+        finally { Indeterminate = false; Busy = false; }
     }
 
     // ------------------------------------------------------------------ update / verify
-    private async Task UpdateAsync(bool full)
+    /// <summary>Fetch signed manifest, (self-update), verify, repair. Returns true when the client is ready.</summary>
+    private async Task<bool> CheckCoreAsync(bool full, CancellationToken ct)
     {
-        if (Busy) return;
-        Busy = true; _verified = false; _offline = false;
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
         var progress = new Progress<UpdateProgress>(ShowProgress);
         try
         {
@@ -142,7 +153,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 if (await new LauncherUpdater(_svc).TryUpdateAsync(_manifest, _cfg.ManifestUrl, CurrentVersion, exe, ct))
                 {
                     Application.Current.Shutdown();
-                    return;
+                    return false;
                 }
                 AddLog("Self-update skipped/failed; continuing with current version.");
             }
@@ -161,16 +172,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 Detail = Loc.F("S_Repaired", todo.Count);
             }
             else Detail = Loc.F("S_UpToDate", vr.Ok);
-            _verified = true;
+            var removed = LanguageService.DeleteObsolete(_cfg.GamePath, m, AddLog);
+            if (removed > 0) AddLog($"Removed {removed} obsolete file(s)");
+            var langCopied = await Task.Run(() => LanguageService.Apply(_cfg.GamePath, m, Lang, cache, AddLog, full), ct);
+            AddLog($"Language {LanguageService.Code(Lang)}: {langCopied} file(s) copied into system");
             Progress = 100;
             Status = Loc.F("S_Ready", m.Version);
+            return true;
         }
-        catch (OperationCanceledException) { Status = Loc["S_Cancelled"]; Detail = ""; }
+        catch (OperationCanceledException) { Status = Loc["S_Cancelled"]; Detail = ""; return false; }
         catch (LauncherException ex) when (ex.Code == "server_unreachable" && _cfg.AllowOfflinePlay && PathSafety.LooksLikeLineageClient(_cfg.GamePath))
         {
             AddLog("ERROR " + ex.Message);
-            _offline = true;
             Status = Loc["S_Offline"]; Detail = "";
+            return true;
         }
         catch (LauncherException ex)
         {
@@ -178,16 +193,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
             var key = "E_" + ex.Code;
             Status = Loc.F("S_Error", Loc[key] == key ? ex.Message : Loc[key]);
             Detail = ex.Code == "hash_mismatch" || ex.Code == "download_failed" ? ex.Message : "";
+            return false;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             AddLog("ERROR " + ex);
             Status = Loc.F("S_Error", ex.Message);
+            return false;
         }
         finally
         {
             Indeterminate = false;
-            Busy = false;
         }
     }
 
@@ -212,10 +228,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static string Size(long b) => b >= 1 << 30 ? $"{b / (double)(1 << 30):F2} GB" : b >= 1 << 20 ? $"{b / (double)(1 << 20):F1} MB" : $"{b / 1024.0:F0} KB";
 
     // ------------------------------------------------------------------ play
-    private async Task PlayAsync()
+    /// <summary>Starts the game (optional pre-launch gate, Option.ini language). Called by LauncherSession.</summary>
+    private async Task LaunchCoreAsync(CancellationToken ct)
     {
-        if (Busy) return;
-        Busy = true;
         try
         {
             string? extraArgs = null;
@@ -224,8 +239,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 Status = Loc["S_Gate"];
                 var gate = new PreLaunchGate(_http);
                 var resp = await gate.CheckAsync(_cfg.PreLaunchUrl, new PreLaunchGate.Request(
-                    CurrentVersion.ToString(3), _manifest?.Version ?? "", IsRussian ? "ru" : "en", _verified, PreLaunchGate.MachineId()),
-                    CancellationToken.None);
+                    CurrentVersion.ToString(3), _manifest?.Version ?? "", IsRussian ? "ru" : "en", _session.VerifiedThisSession, PreLaunchGate.MachineId()),
+                    ct);
                 AddLog($"Gate: allow={resp.Allow} msg={resp.Message}");
                 if (!resp.Allow)
                 {
@@ -234,9 +249,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 }
                 extraArgs = resp.GameArguments;
             }
+            if (_manifest != null && LanguageService.HasLanguages(_manifest))
+            {
+                Status = Loc["S_Lang"];
+                var cache = HashCache.Load(HashCache.DefaultFileFor(_cfg.GamePath));
+                var m = _manifest;
+                var n = await Task.Run(() => LanguageService.Apply(_cfg.GamePath, m, Lang, cache, AddLog), ct);
+                AddLog($"Language {LanguageService.Code(Lang)} active ({n} file(s) copied)");
+            }
+            else AddLog("Language files not applied (no verified manifest in this session).");
             Status = Loc["S_Launching"];
-            AddLog($"Option.ini [Game] IsNative={GameLanguageService.IsNativeValue(Lang)} ({Lang})");
-            var p = GameStarter.Start(_cfg, Lang, extraArgs);
+            var p = GameStarter.Start(_cfg, extraArgs);
             AddLog($"Started {_cfg.GameExecutable} pid={p.Id}");
             if (_cfg.CloseOnLaunch) Application.Current.Shutdown();
             else Application.Current.MainWindow.WindowState = WindowState.Minimized;
@@ -247,12 +270,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             var key = "E_" + ex.Code;
             Status = Loc[key] == key ? Loc.F("S_Error", ex.Message) : Loc[key];
         }
-        catch (Exception ex)
-        {
-            AddLog("ERROR " + ex);
-            Status = Loc.F("S_Error", ex.Message);
-        }
-        finally { Busy = false; }
     }
 
     private void OpenShell(string target)

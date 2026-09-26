@@ -16,6 +16,21 @@ public sealed class Manifest
     /// <summary>User-editable files the launcher must never overwrite (informational + enforced).</summary>
     [JsonProperty("userConfig")] public List<string> UserConfig { get; set; } = new();
     [JsonProperty("launcher")] public LauncherRelease? Launcher { get; set; }
+    /// <summary>Language-dependent files (see LanguageService). Null = single-language client.</summary>
+    [JsonProperty("languages")] public LanguageInfo? Languages { get; set; }
+    /// <summary>Files from older layouts that the launcher deletes if present (e.g. Korea-slot *-k.dat).</summary>
+    [JsonProperty("obsolete")] public List<string> Obsolete { get; set; } = new();
+}
+
+/// <summary>
+/// Each language set lives in "lang/&lt;code&gt;/&lt;path&gt;" (normal manifest entries); "files" lists the target
+/// paths in the client (e.g. "system/itemname-e.dat") that receive a copy of the selected set.
+/// </summary>
+public sealed class LanguageInfo
+{
+    [JsonProperty("default")] public string Default { get; set; } = "en";
+    [JsonProperty("sets")] public List<string> Sets { get; set; } = new();
+    [JsonProperty("files")] public List<string> Files { get; set; } = new();
 }
 
 public sealed class ManifestFile

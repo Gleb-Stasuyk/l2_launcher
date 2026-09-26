@@ -30,7 +30,7 @@ DEFAULT_EXCLUDES = [
     "system/option.ini", "system/user.ini", "system/windowsinfo.ini",
     "*.log", "*.part", "*.launcher.tmp", "*.bak", "*.tmp",
     "screenshot/*", "screenshots/*", "replay/*",
-    "enru_switch/*",
+    "enru_switch/*", "lang/*", "_backup_*/*", "_launcher_test_backup_*/*",
     "l2launcher*.exe", "launcher.json", "*.exe.new",
     "thumbs.db", "desktop.ini",
 ]
@@ -92,7 +92,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--client", required=True, help="reference client folder (contains system/)")
     ap.add_argument("--overlay", action="append", default=[], help="extra folder copied over the client (repeatable)")
-    ap.add_argument("--enru", action="store_true", help="add -k.dat copies like enru_switch/install_finish.bat")
+    ap.add_argument("--enru", action="store_true", help="LEGACY Korea-slot layout: add -k.dat copies like enru_switch/install_finish.bat")
+    ap.add_argument("--lang-ru", default=None,
+                    help="folder with Russian versions under English names (e.g. system/itemname-e.dat). Files that differ from "
+                         "the client become lang/en/<path> + lang/ru/<path>; the launcher copies the chosen set into place")
+    ap.add_argument("--obsolete-enru", action="store_true",
+                    help="list the Korea-slot files (system/*-k.dat etc.) as obsolete so launchers delete them")
     ap.add_argument("--exclude", action="append", default=[], help="extra glob to exclude (relative, case-insensitive)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--key", default=str(ROOT / "keys" / "manifest_private.pem"))
@@ -131,6 +136,34 @@ def main():
         if missing:
             sys.exit(f"--enru given but required RU files are missing: {missing}")
 
+    languages = None
+    if a.lang_ru:
+        ru_dir = Path(a.lang_ru)
+        targets = []
+        for p in sorted(ru_dir.rglob("*")):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(ru_dir).as_posix()
+            key = rel.lower()
+            if key not in files:
+                sys.exit(f"--lang-ru: {rel} has no English counterpart in the client")
+            disp, en_src = files.pop(key)
+            if sha256(en_src) == sha256(p):
+                files[key] = (disp, en_src)  # identical: not language-dependent
+                continue
+            files[f"lang/en/{key}"] = (f"lang/en/{disp}", en_src)
+            files[f"lang/ru/{key}"] = (f"lang/ru/{disp}", p)
+            targets.append(disp)
+        languages = {"default": "en", "sets": ["en", "ru"], "files": targets}
+        print(f"  languages: {len(targets)} language-dependent files -> lang/en + lang/ru")
+
+    obsolete = []
+    if a.obsolete_enru:
+        obsolete = [f"system/{n}-k.dat" for n in ENRU_K_NAMES] + [k for _, k in ENRU_EXTRA]
+        dropped = [files.pop(o.lower())[0] for o in obsolete if o.lower() in files]
+        if dropped:
+            print(f"  obsolete: {len(dropped)} Korea-slot files found in the reference were left out: {dropped}")
+
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     fdir = out / "files"
@@ -162,6 +195,10 @@ def main():
         "files": entries,
         "userConfig": USER_CONFIG,
     }
+    if languages:
+        manifest["languages"] = languages
+    if obsolete:
+        manifest["obsolete"] = obsolete
     if a.base_url:
         if not a.base_url.startswith("https://"):
             sys.exit("--base-url must be https://")

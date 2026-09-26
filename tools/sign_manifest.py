@@ -19,6 +19,12 @@ def check(m):
         assert re.fullmatch(r"[0-9a-f]{64}", f["sha256"]), f"bad sha256 {p}"
         assert p.lower() not in seen, f"duplicate {p}"
         seen.add(p.lower())
+    lang = m.get("languages")
+    if lang:
+        for t in lang["files"]:
+            assert t.lower() not in seen, f"language target also a normal file: {t}"
+            for c in lang["sets"]:
+                assert f"lang/{c}/{t}".lower() in seen, f"set {c} missing {t}"
     return len(seen)
 
 ap = argparse.ArgumentParser()

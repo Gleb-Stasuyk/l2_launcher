@@ -4,18 +4,11 @@ namespace L2Launcher.Core;
 
 public static class GameStarter
 {
-    /// <summary>Writes the language to Option.ini, checks RU files, then starts system\l2.exe with working dir = system.</summary>
-    public static Process Start(LauncherConfig cfg, GameLanguage lang, string? extraArgs = null)
+    /// <summary>Starts system\l2.exe with working dir = system. (Language files are applied before, by LanguageService.)</summary>
+    public static Process Start(LauncherConfig cfg, string? extraArgs = null)
     {
         var exe = PathSafety.ResolveSafePath(cfg.GamePath, cfg.GameExecutable);
         if (!File.Exists(exe)) throw new LauncherException("no_game_exe", $"Game executable not found: {exe}");
-        if (lang == GameLanguage.Russian)
-        {
-            var missing = GameLanguageService.MissingRussianFiles(cfg.GamePath);
-            if (missing.Count > 0)
-                throw new LauncherException("ru_files_missing", "Russian language files are missing: " + string.Join(", ", missing));
-        }
-        GameLanguageService.Apply(cfg.GamePath, lang);
         var args = string.Join(" ", new[] { cfg.GameArguments, extraArgs }.Where(s => !string.IsNullOrWhiteSpace(s)));
         var psi = new ProcessStartInfo
         {

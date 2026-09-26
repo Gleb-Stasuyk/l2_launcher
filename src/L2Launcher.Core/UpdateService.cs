@@ -65,6 +65,19 @@ public sealed class UpdateService
             if (!seen.Add(PathSafety.Normalize(f.Path)))
                 throw new LauncherException("bad_manifest", $"Duplicate entry in manifest: {f.Path}");
         }
+        if (m.Languages != null)
+        {
+            foreach (var t in m.Languages.Files)
+            {
+                PathSafety.ResolveSafePath(Path.GetTempPath(), t);
+                if (seen.Contains(PathSafety.Normalize(t)))
+                    throw new LauncherException("bad_manifest", $"Language file also listed as normal file: {t}");
+                foreach (var code in m.Languages.Sets)
+                    if (!seen.Contains(PathSafety.Normalize(LanguageService.SetPath(code, t))))
+                        throw new LauncherException("bad_manifest", $"Language set '{code}' is missing {t}");
+            }
+        }
+        foreach (var o in m.Obsolete) PathSafety.ResolveSafePath(Path.GetTempPath(), o);
         return m;
     }
 
