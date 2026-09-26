@@ -1,7 +1,7 @@
 <Window x:Class="L2Launcher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{Binding Title}" Width="860" Height="520" MinWidth="720" MinHeight="440"
+        Title="{Binding Title}" Icon="pack://application:,,,/icon.ico" Width="900" Height="520" MinWidth="720" MinHeight="440"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}" Foreground="{StaticResource Fg}"
         FontFamily="Segoe UI">
     <Window.Resources>
@@ -22,10 +22,24 @@
                 <ToggleButton Style="{StaticResource LangBtn}" Content="English" IsChecked="{Binding IsEnglish, Mode=TwoWay}" IsEnabled="{Binding NotBusy}"/>
                 <ToggleButton Style="{StaticResource LangBtn}" Content="Русский" IsChecked="{Binding IsRussian, Mode=TwoWay}" IsEnabled="{Binding NotBusy}"/>
             </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0"
+                        Visibility="{Binding ServersVisible, Converter={StaticResource B2V}}">
+                <TextBlock Text="{Binding Loc[Server]}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ItemsControl ItemsSource="{Binding ServerOptions}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding DataContext.NotBusy, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
             <StackPanel>
                 <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
                 <TextBlock Text="{Binding VersionText}" Foreground="{StaticResource Muted}" FontSize="11"/>
-                <TextBlock FontSize="12" Margin="0,2,0,0"><Hyperlink Command="{Binding WebsiteCommand}" Foreground="{StaticResource Accent}"><Run Text="{Binding WebsiteText, Mode=OneWay}"/></Hyperlink></TextBlock>
             </StackPanel>
         </DockPanel>
 
@@ -33,26 +47,11 @@
         <Border Grid.Row="1" Background="{StaticResource Panel}" CornerRadius="6" Margin="0,18,0,12" Padding="16">
             <Grid>
                 <StackPanel VerticalAlignment="Top">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10"
-                                Visibility="{Binding ServersVisible, Converter={StaticResource B2V}}">
-                        <TextBlock Text="{Binding Loc[Server]}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ItemsControl ItemsSource="{Binding ServerOptions}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                  IsEnabled="{Binding DataContext.NotBusy, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
                     <TextBlock Text="{Binding Loc[LangHint]}" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
                 </StackPanel>
                 <ListBox ItemsSource="{Binding Log}" Visibility="{Binding LogVisible, Converter={StaticResource B2V}}"
                          Background="#111318" Foreground="#C8C8C8" BorderThickness="0" FontFamily="Consolas" FontSize="11"
-                         Margin="0,80,0,0" ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                         Margin="0,40,0,0" ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
             </Grid>
         </Border>
 

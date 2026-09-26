@@ -10,12 +10,12 @@
     <AssemblyName>L2Launcher</AssemblyName>
     <RootNamespace>L2Launcher</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon Condition="Exists('icon.ico')">icon.ico</ApplicationIcon>
-    <Version>1.2.0</Version>
-    <FileVersion>1.2.0.0</FileVersion>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.2.1</Version>
+    <FileVersion>1.2.1.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <Product>L2 Launcher</Product>
-    <AssemblyTitle>L2 Launcher</AssemblyTitle>
+    <Product>L2Start Launcher</Product>
+    <AssemblyTitle>L2Start Launcher</AssemblyTitle>
     <Description>Lineage II Interlude launcher: update, integrity check, EN/RU language</Description>
     <Copyright>Copyright (c) 2026 Gleb Stasyuk; portions (c) 2025-2026 L2Titan (MIT)</Copyright>
     <NeutralLanguage>en</NeutralLanguage>
@@ -33,5 +33,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\L2Launcher.Core\L2Launcher.Core.csproj" />
+    <Resource Include="icon.ico" />
   </ItemGroup>
 </Project>

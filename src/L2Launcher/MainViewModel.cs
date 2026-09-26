@@ -70,7 +70,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private bool _logVisible;
     public bool LogVisible { get => _logVisible; set { _logVisible = value; On(); } }
     public string VersionText => $"v{CurrentVersion.ToString(3)}";
-    public string WebsiteText => Uri.TryCreate(_cfg.WebsiteUrl, UriKind.Absolute, out var u) && Settings.IsHttps(_cfg.WebsiteUrl) ? u.Host : "";
 
     public bool IsRussian { get => Loc.Russian; set { if (value) SetLang(true); else On(); } }
     public bool IsEnglish { get => !Loc.Russian; set { if (value) SetLang(false); else On(); } }
@@ -116,8 +115,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                     : System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ru"
         };
         Loc.SetRussian(ru); On(nameof(IsRussian)); On(nameof(IsEnglish));
-        Title = _cfg.ServerName;
-        On(nameof(WebsiteText));
+        Title = string.IsNullOrWhiteSpace(_cfg.ServerName) ? BuildDefaults.ServerName : _cfg.ServerName;
         // Server list from the last signed manifest (no network at startup).
         var cached = ManifestCache.TryLoad(Settings.LocalDataDir, _cfg.ManifestUrl, _svc);
         if (cached != null) ShowServers(cached);
@@ -156,7 +154,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (_svc.LastRaw is { } raw) ManifestCache.Save(Settings.LocalDataDir, _cfg.ManifestUrl, raw.Bytes, raw.Sig);
             var fresh = _manifest;
             Application.Current?.Dispatcher.Invoke(() => ShowServers(fresh));
-            if (!string.IsNullOrWhiteSpace(_manifest.Product) && _cfg.ServerName == BuildDefaults.ServerName) Title = _manifest.Product;
 
             // Self-update (only when running as the published single-file exe)
             var exe = Environment.ProcessPath;

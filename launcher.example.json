@@ -1,11 +1,11 @@
 {
   "ManifestUrl": "https://updates.example.com/l2/manifest.json",
-  "ServerName": "Lineage II Interlude x100",
+  "ServerName": "L2Start",
   "GamePath": "",
   "GameExecutable": "system/l2.exe",
   "GameArguments": "",
   "PreLaunchUrl": "",
   "AllowOfflinePlay": false,
   "CloseOnLaunch": true,
-  "WebsiteUrl": ""
+  "WebsiteUrl": "https://l2start.ru"
 }

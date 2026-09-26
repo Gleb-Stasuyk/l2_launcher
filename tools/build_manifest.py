@@ -34,8 +34,8 @@ DEFAULT_EXCLUDES = [
     "l2launcher*.exe", "launcher.json", "*.exe.new",
     "thumbs.db", "desktop.ini",
 ]
-DEFAULT_SERVER_NAMES = {"main": {"en": "Main", "ru": "Основной сервер"},
-                        "local": {"en": "Local", "ru": "Локальный сервер"}}
+DEFAULT_SERVER_NAMES = {"main": {"en": "L2Start", "ru": "L2Start"},
+                        "local": {"en": "Local server", "ru": "Локальный сервер"}}
 USER_CONFIG = ["system/Option.ini", "system/User.ini", "system/WindowsInfo.ini"]
 
 # From enru_switch/install_finish.bat
@@ -104,7 +104,7 @@ def main():
                     help="selectable server: DIR holds its own versions of client files (e.g. DIR/system/l2.ini). "
                          "Shipped as server/<ID>/<path>; the launcher copies the chosen one into place. Repeatable")
     ap.add_argument("--server-name", action="append", default=[], metavar="ID=EN|RU",
-                    help='display names, e.g. "main=Main|Основной сервер" (defaults exist for main/local)')
+                    help='display names, e.g. "main=L2Start|L2Start" (defaults: main=L2Start, local=Local server|Локальный сервер)')
     ap.add_argument("--default-server", default=None, help="server selected for new players (default: main, else first)")
     ap.add_argument("--hide-server", action="append", default=[], metavar="ID",
                     help="keep the server in the manifest but do not offer it in the launcher (e.g. local in production)")

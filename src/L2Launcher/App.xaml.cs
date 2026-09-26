@@ -13,14 +13,14 @@ public partial class App : Application
         _mutex = new Mutex(true, @"Local\L2Launcher_SingleInstance", out bool created);
         if (!created)
         {
-            MessageBox.Show("The launcher is already running. / Лаунчер уже запущен.", "L2 Launcher");
+            MessageBox.Show("The launcher is already running. / Лаунчер уже запущен.", "L2Start");
             Shutdown();
             return;
         }
         DispatcherUnhandledException += (_, a) =>
         {
             WriteCrash(a.Exception);
-            MessageBox.Show(a.Exception.Message, "L2 Launcher", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(a.Exception.Message, "L2Start", MessageBoxButton.OK, MessageBoxImage.Error);
             a.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (_, a) => WriteCrash(a.ExceptionObject as Exception);

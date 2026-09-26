@@ -247,13 +247,15 @@ public class EndToEndTests : IDisposable
     {
         var main = MakeServerDir("main", "80.78.246.62");
         var local = MakeServerDir("local", "127.0.0.1");
-        var (svc, m, url, outDir, http) = await Serve($"--server main=\"{main}\" --server local=\"{local}\" --server-name \"main=Main|Основной сервер\"");
+        var (svc, m, url, outDir, http) = await Serve($"--server main=\"{main}\" --server local=\"{local}\"");
         Assert.NotNull(m.Servers);
         Assert.Equal("main", m.Servers!.Default);
         Assert.Equal(new[] { "system/l2.ini" }, m.Servers.Files);
         Assert.Equal(new[] { "main", "local" }, m.Servers.List.Select(x => x.Id));
-        Assert.Equal("Основной сервер", ServerService.DisplayName(m.Servers.List[0], true));
-        Assert.Equal("Local", ServerService.DisplayName(m.Servers.List[1], false));
+        Assert.Equal("L2Start", ServerService.DisplayName(m.Servers.List[0], true));
+        Assert.Equal("L2Start", ServerService.DisplayName(m.Servers.List[0], false));
+        Assert.Equal("Локальный сервер", ServerService.DisplayName(m.Servers.List[1], true));
+        Assert.Equal("Local server", ServerService.DisplayName(m.Servers.List[1], false));
         var paths = m.Files.Select(f => f.Path.ToLowerInvariant()).ToList();
         Assert.Contains("server/main/system/l2.ini", paths);
         Assert.Contains("server/local/system/l2.ini", paths);
