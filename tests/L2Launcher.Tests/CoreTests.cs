@@ -83,6 +83,9 @@ public class SafetyTests
         Assert.True(LauncherUpdater.ShouldUpdate(m, new Version(1, 0, 0)));
         Assert.False(LauncherUpdater.ShouldUpdate(m, new Version(1, 2, 0)));
         Assert.False(LauncherUpdater.IsSameHttpsHost("http://a.com/x", "https://a.com/m.json"));
+        Assert.False(LauncherUpdater.IsSameHttpsHost("http://a.com/x", "http://a.com/m.json"));
+        Assert.True(LauncherUpdater.IsSameHttpsHost("http://127.0.0.1:8765/files/x.exe", "http://127.0.0.1:8765/manifest.json"));
+        Assert.False(LauncherUpdater.IsSameHttpsHost("http://127.0.0.1:9999/files/x.exe", "http://127.0.0.1:8765/manifest.json"));
         Assert.False(LauncherUpdater.IsSameHttpsHost("https://b.com/x", "https://a.com/m.json"));
         Assert.True(LauncherUpdater.IsSameHttpsHost("https://a.com/files/launcher/x.exe", "https://a.com/m.json"));
     }
@@ -93,6 +96,43 @@ public class SafetyTests
         var svc = new UpdateService(new HttpClient());
         var ex = await Assert.ThrowsAsync<LauncherException>(() => svc.FetchManifestAsync("http://example.com/manifest.json", default));
         Assert.Equal("insecure_url", ex.Code);
+    }
+
+    [Theory]
+    [InlineData("https://updates.example.com/m.json", true)]
+    [InlineData("http://127.0.0.1:8765/manifest.json", true)]
+    [InlineData("http://localhost:8765/manifest.json", true)]
+    [InlineData("http://[::1]:8765/manifest.json", true)]
+    [InlineData("http://example.com/manifest.json", false)]
+    [InlineData("http://192.168.1.10/manifest.json", false)]
+    [InlineData("http://10.0.0.1/manifest.json", false)]
+    [InlineData("http://localhost.evil.com/manifest.json", false)]
+    [InlineData("http://127.0.0.1.nip.io/manifest.json", false)]
+    [InlineData("ftp://127.0.0.1/manifest.json", false)]
+    [InlineData("file:///C:/x/manifest.json", false)]
+    public void OnlyHttpsOrLoopbackHttpAllowed(string url, bool allowed) => Assert.Equal(allowed, Settings.IsAllowedUrl(url));
+
+    [Fact]
+    public async Task NonLoopbackHttpIsRefusedByUpdateService()
+    {
+        var svc = new UpdateService(new HttpClient());
+        foreach (var u in new[] { "http://192.168.1.10/manifest.json", "http://localhost.evil.com/manifest.json" })
+        {
+            var ex = await Assert.ThrowsAsync<LauncherException>(() => svc.FetchManifestAsync(u, default));
+            Assert.Equal("insecure_url", ex.Code);
+            ex = await Assert.ThrowsAsync<LauncherException>(() => svc.DownloadOneAsync(u, Path.Combine(Path.GetTempPath(), "x.bin"), new string('a', 64), 1, null, default));
+            Assert.Equal("insecure_url", ex.Code);
+        }
+    }
+
+    [Fact]
+    public void ConfigRejectsNonLoopbackHttp()
+    {
+        var dir = Directory.CreateTempSubdirectory("l2cfg").FullName;
+        File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"ManifestUrl\":\"http://example.com/manifest.json\"}");
+        Assert.Equal(BuildDefaults.ManifestUrl, Settings.LoadConfig(dir).cfg.ManifestUrl);
+        File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"ManifestUrl\":\"http://127.0.0.1:8765/manifest.json\"}");
+        Assert.Equal("http://127.0.0.1:8765/manifest.json", Settings.LoadConfig(dir).cfg.ManifestUrl);
     }
 }
 
@@ -159,7 +199,7 @@ public class EndToEndTests : IDisposable
         using var http = new HttpClient();
         for (int i = 0; i < 50; i++) { try { await http.GetAsync(url); break; } catch { await Task.Delay(100); } }
 
-        var svc = new UpdateService(http, allowHttpForTests: true);
+        var svc = new UpdateService(http);
         var m = await svc.FetchManifestAsync(url, default);
         Assert.Equal("test.1", m.Version);
         var paths = m.Files.Select(f => f.Path.ToLowerInvariant()).ToList();

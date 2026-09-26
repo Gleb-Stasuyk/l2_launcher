@@ -10,20 +10,17 @@ public sealed class UpdateService
 {
     public const int SupportedFormat = 1;
     private readonly HttpClient _http;
-    private readonly bool _allowHttpForTests;
     private readonly string? _publicKeyPem;
 
-    /// <param name="allowHttpForTests">Only for unit tests against a local http server. The app always passes false.</param>
-    public UpdateService(HttpClient http, bool allowHttpForTests = false, string? publicKeyPem = null)
+    public UpdateService(HttpClient http, string? publicKeyPem = null)
     {
-        _http = http; _allowHttpForTests = allowHttpForTests; _publicKeyPem = publicKeyPem;
+        _http = http; _publicKeyPem = publicKeyPem;
     }
 
     private void RequireSecure(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) throw new LauncherException("bad_url", $"Invalid URL: {url}");
-        if (u.Scheme == Uri.UriSchemeHttps) return;
-        if (_allowHttpForTests && u.Scheme == Uri.UriSchemeHttp && u.IsLoopback) return;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _)) throw new LauncherException("bad_url", $"Invalid URL: {url}");
+        if (Settings.IsAllowedUrl(url)) return; // https, or http on loopback only (local test host)
         throw new LauncherException("insecure_url", $"Only https URLs are allowed: {url}");
     }
 

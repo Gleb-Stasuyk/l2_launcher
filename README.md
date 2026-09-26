@@ -35,7 +35,7 @@ Either edit `BuildDefaults.ManifestUrl` in `src/L2Launcher.Core/Settings.cs` and
 ```json
 { "ManifestUrl": "https://updates.example.com/l2/manifest.json", "ServerName": "L2 Interlude x100" }
 ```
-The URL must be https. Files are fetched from `<folder of manifest.json>/files/<path>`, unless the manifest has `baseUrl`.
+The URL must be https (exception for local tests: plain `http://127.0.0.1` / `localhost` / `[::1]` is accepted; the signature is still required). Files are fetched from `<folder of manifest.json>/files/<path>`, unless the manifest has `baseUrl`.
 `GamePath` empty means the launcher's own folder, so put `L2Launcher.exe` into the client root (next to `system\`).
 Player preferences (language) live in `%LOCALAPPDATA%\L2Launcher\prefs.json`, together with the hash cache, crash.log and update.log.
 
@@ -55,6 +55,8 @@ python3 tools/build_manifest.py \
 * `--enru` also creates `<name>-k.dat` copies of English files that have no Russian version, like `install_finish.bat` does.
 * Excluded, and never overwritten by the launcher either: `system\Option.ini`, `User.ini`, `WindowsInfo.ini`, `*.log`, `*.part`,
   screenshots, replays, the launcher itself and `launcher.json`. Add more with `--exclude "glob"`.
+* To keep the private key on another machine: run with `--unsigned` where the client is, copy `manifest.json` to the key machine,
+  run `python3 tools/sign_manifest.py manifest.json`, copy `manifest.json.sig` back.
 * Upload `out/update/` so that `manifest.json`, `manifest.json.sig` and `files/` sit at the ManifestUrl folder.
   Any static https host works (nginx on the VPS, a CDN). Serve `.sig` as text and don't gzip-transform it.
 * Self-update: bump `<Version>` in `src/L2Launcher/L2Launcher.csproj`, run `./publish.sh`, then rebuild the manifest with
@@ -74,7 +76,7 @@ and starts the game only on 2xx with `{"allow":true}`. `message` is shown to the
 See `docs/SERVER_NOTES.md`.
 
 ## Tests
-`dotnet test tests/L2Launcher.Tests` runs 13 tests: INI editing on a real Option.ini, path traversal, protected
+`dotnet test tests/L2Launcher.Tests` runs the tests: INI editing on a real Option.ini, path traversal, protected
 files, self-update rules, http rejection, and an end-to-end run. The end-to-end test builds a fake client + real enru overlay,
 signs it with keys/, serves it on 127.0.0.1, installs it into an empty folder, tampers/deletes files, repairs them,
 checks that Option.ini is untouched and that a tampered manifest is rejected.

@@ -59,12 +59,14 @@ public static class Settings
             }
             catch (Exception ex) { warnings.Add($"launcher.json invalid: {ex.Message}"); cfg = new LauncherConfig(); }
         }
-        if (!IsHttps(cfg.ManifestUrl))
+        if (!IsAllowedUrl(cfg.ManifestUrl))
         {
             warnings.Add($"ManifestUrl must be https: '{cfg.ManifestUrl}' - using default.");
             cfg.ManifestUrl = BuildDefaults.ManifestUrl;
         }
-        if (!string.IsNullOrWhiteSpace(cfg.PreLaunchUrl) && !IsHttps(cfg.PreLaunchUrl))
+        else if (IsLoopbackHttp(cfg.ManifestUrl))
+            warnings.Add($"TEST MODE: plain http update host on loopback ({cfg.ManifestUrl}).");
+        if (!string.IsNullOrWhiteSpace(cfg.PreLaunchUrl) && !IsAllowedUrl(cfg.PreLaunchUrl))
         {
             warnings.Add($"PreLaunchUrl must be https: '{cfg.PreLaunchUrl}' - disabled.");
             cfg.PreLaunchUrl = "";
@@ -76,6 +78,20 @@ public static class Settings
 
     public static bool IsHttps(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
+
+    /// <summary>
+    /// Test exception: plain http is accepted ONLY for loopback hosts (127.0.0.0/8, ::1, "localhost"),
+    /// so a local test update host can be used without certificates. Everything else must be https.
+    /// The manifest signature is still required, so a loopback server cannot push unsigned files.
+    /// </summary>
+    public static bool IsLoopbackHttp(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttp && IsLoopbackHost(u);
+
+    public static bool IsLoopbackHost(Uri u) =>
+        u.IsLoopback && (u.HostNameType is UriHostNameType.IPv4 or UriHostNameType.IPv6
+                         || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase));
+
+    public static bool IsAllowedUrl(string? url) => IsHttps(url) || IsLoopbackHttp(url);
 
     private static string PrefsFile => Path.Combine(LocalDataDir, "prefs.json");
 

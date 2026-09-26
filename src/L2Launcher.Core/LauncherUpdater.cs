@@ -22,7 +22,8 @@ public sealed class LauncherUpdater
         try
         {
             var u = new Uri(url); var r = new Uri(referenceUrl);
-            return u.Scheme == Uri.UriSchemeHttps && string.Equals(u.Host, r.Host, StringComparison.OrdinalIgnoreCase);
+            bool schemeOk = u.Scheme == Uri.UriSchemeHttps || (u.Scheme == Uri.UriSchemeHttp && Settings.IsLoopbackHost(u) && Settings.IsLoopbackHost(r));
+            return schemeOk && string.Equals(u.Host, r.Host, StringComparison.OrdinalIgnoreCase) && u.Port == r.Port;
         }
         catch { return false; }
     }

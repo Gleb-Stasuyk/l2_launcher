@@ -23,8 +23,6 @@ Rules:
 """
 import argparse, base64, fnmatch, hashlib, json, os, shutil, sys, datetime
 from pathlib import Path
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -79,6 +77,17 @@ def scan(folder: Path, patterns, files: dict, label: str):
     print(f"  {label}: {n} files from {folder}")
 
 
+def sign_file(manifest_path: Path, key_path: Path):
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    data = manifest_path.read_bytes()
+    key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+    sig = key.sign(data, padding.PKCS1v15(), hashes.SHA256())
+    key.public_key().verify(sig, data, padding.PKCS1v15(), hashes.SHA256())  # self-check
+    Path(str(manifest_path) + ".sig").write_text(base64.b64encode(sig).decode())
+    print(f"signed:   {manifest_path}.sig")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--client", required=True, help="reference client folder (contains system/)")
@@ -93,6 +102,9 @@ def main():
     ap.add_argument("--launcher-exe", default=None, help="launcher exe to offer as self-update")
     ap.add_argument("--launcher-version", default=None)
     ap.add_argument("--no-copy", action="store_true", help="only write manifest (files/ already uploaded)")
+    ap.add_argument("--no-link", action="store_true", help="always copy into files/ (no hard links; use when the reference folder will change)")
+    ap.add_argument("--unsigned", action="store_true",
+                    help="write manifest.json only; sign it elsewhere with tools/sign_manifest.py (keeps the private key off this machine)")
     a = ap.parse_args()
 
     client = Path(a.client)
@@ -134,10 +146,13 @@ def main():
             dst.parent.mkdir(parents=True, exist_ok=True)
             if dst.exists():
                 dst.unlink()
-            try:
-                os.link(src, dst)
-            except OSError:
+            if a.no_link:
                 shutil.copy2(src, dst)
+            else:
+                try:
+                    os.link(src, dst)
+                except OSError:
+                    shutil.copy2(src, dst)
 
     manifest = {
         "format": 1,
@@ -163,11 +178,14 @@ def main():
             shutil.copy2(le, fdir / rel)
 
     data = json.dumps(manifest, ensure_ascii=False, indent=1).encode("utf-8")
-    key = serialization.load_pem_private_key(Path(a.key).read_bytes(), password=None)
-    sig = key.sign(data, padding.PKCS1v15(), hashes.SHA256())
-    key.public_key().verify(sig, data, padding.PKCS1v15(), hashes.SHA256())  # self-check
     (out / "manifest.json").write_bytes(data)
-    (out / "manifest.json.sig").write_text(base64.b64encode(sig).decode())
+    if a.unsigned:
+        stale = out / "manifest.json.sig"
+        if stale.exists():
+            stale.unlink()
+        print("UNSIGNED: sign manifest.json with tools/sign_manifest.py and put manifest.json.sig next to it")
+    else:
+        sign_file(out / "manifest.json", Path(a.key))
     print(f"manifest: {len(entries)} files, {total / 1048576:.1f} MiB, version {a.version}")
     print(f"written:  {out / 'manifest.json'} (+ .sig){'' if a.no_copy else ' and files/'}")
 
