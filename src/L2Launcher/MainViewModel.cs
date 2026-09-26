@@ -17,6 +17,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public Loc Loc { get; } = new();
     public ObservableCollection<string> Log { get; } = new();
+    public ObservableCollection<ServerOption> ServerOptions { get; } = new();
+    private bool _serversVisible;
+    public bool ServersVisible { get => _serversVisible; set { _serversVisible = value; On(); } }
+    /// <summary>Manifest whose server list is shown (fresh one after a check, else the cached signed one).</summary>
+    private Manifest? _serverSource;
 
     private readonly HttpClient _http;
     private readonly UpdateService _svc;
@@ -65,6 +70,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private bool _logVisible;
     public bool LogVisible { get => _logVisible; set { _logVisible = value; On(); } }
     public string VersionText => $"v{CurrentVersion.ToString(3)}";
+    public string WebsiteText => Uri.TryCreate(_cfg.WebsiteUrl, UriKind.Absolute, out var u) && Settings.IsHttps(_cfg.WebsiteUrl) ? u.Host : "";
 
     public bool IsRussian { get => Loc.Russian; set { if (value) SetLang(true); else On(); } }
     public bool IsEnglish { get => !Loc.Russian; set { if (value) SetLang(false); else On(); } }
@@ -74,6 +80,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (Loc.Russian != ru)
         {
             Loc.SetRussian(ru);
+            RefreshServerNames();
             _prefs.Language = ru ? "ru" : "en";
             Settings.SavePrefs(_prefs);
             AddLog($"Language -> {_prefs.Language}");
@@ -110,6 +117,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
         };
         Loc.SetRussian(ru); On(nameof(IsRussian)); On(nameof(IsEnglish));
         Title = _cfg.ServerName;
+        On(nameof(WebsiteText));
+        // Server list from the last signed manifest (no network at startup).
+        var cached = ManifestCache.TryLoad(Settings.LocalDataDir, _cfg.ManifestUrl, _svc);
+        if (cached != null) ShowServers(cached);
         AddLog($"L2Launcher {CurrentVersion} config={src ?? "(built-in defaults)"}");
         AddLog($"Manifest: {_cfg.ManifestUrl}");
         AddLog($"Game path: {_cfg.GamePath}");
@@ -142,13 +153,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Indeterminate = true; Status = Loc["S_Fetch"]; Detail = "";
             _manifest = await _svc.FetchManifestAsync(_cfg.ManifestUrl, ct);
             AddLog($"Manifest OK (signature verified): {_manifest.Product} {_manifest.Version}, {_manifest.Files.Count} files");
+            if (_svc.LastRaw is { } raw) ManifestCache.Save(Settings.LocalDataDir, _cfg.ManifestUrl, raw.Bytes, raw.Sig);
+            var fresh = _manifest;
+            Application.Current?.Dispatcher.Invoke(() => ShowServers(fresh));
             if (!string.IsNullOrWhiteSpace(_manifest.Product) && _cfg.ServerName == BuildDefaults.ServerName) Title = _manifest.Product;
 
             // Self-update (only when running as the published single-file exe)
             var exe = Environment.ProcessPath;
             if (exe != null && exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && LauncherUpdater.ShouldUpdate(_manifest, CurrentVersion))
             {
-                Status = Loc.F("S_SelfUpdate", _manifest.Launcher!.Version);
+                Status = Loc.F("S_SelfUpdate", _manifest!.Launcher!.Version);
                 AddLog($"Self-update {CurrentVersion} -> {_manifest.Launcher.Version}");
                 if (await new LauncherUpdater(_svc).TryUpdateAsync(_manifest, _cfg.ManifestUrl, CurrentVersion, exe, ct))
                 {
@@ -176,6 +190,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (removed > 0) AddLog($"Removed {removed} obsolete file(s)");
             var langCopied = await Task.Run(() => LanguageService.Apply(_cfg.GamePath, m, Lang, cache, AddLog, full), ct);
             AddLog($"Language {LanguageService.Code(Lang)}: {langCopied} file(s) copied into system");
+            if (ServerService.HasServers(m))
+            {
+                var sid = SelectedServer(m);
+                var srvCopied = await Task.Run(() => ServerService.Apply(_cfg.GamePath, m, sid, cache, AddLog, full), ct);
+                AddLog($"Server {sid}: {srvCopied} file(s) copied into system");
+            }
             Progress = 100;
             Status = Loc.F("S_Ready", m.Version);
             return true;
@@ -258,6 +278,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 AddLog($"Language {LanguageService.Code(Lang)} active ({n} file(s) copied)");
             }
             else AddLog("Language files not applied (no verified manifest in this session).");
+            if (_manifest != null && ServerService.HasServers(_manifest))
+            {
+                Status = Loc["S_Server"];
+                var cache = HashCache.Load(HashCache.DefaultFileFor(_cfg.GamePath));
+                var m = _manifest;
+                var sid = SelectedServer(m);
+                var n = await Task.Run(() => ServerService.Apply(_cfg.GamePath, m, sid, cache, AddLog), ct);
+                AddLog($"Server {sid} active ({n} file(s) copied)");
+            }
+            try { if (OptionIni.EnsureIsNativeFalse(_cfg.GamePath)) AddLog("Option.ini: [Game] IsNative=False set"); }
+            catch (Exception ex) { AddLog("WARN cannot update Option.ini: " + ex.Message); }
             Status = Loc["S_Launching"];
             var p = GameStarter.Start(_cfg, extraArgs);
             AddLog($"Started {_cfg.GameExecutable} pid={p.Id}");
@@ -272,9 +303,60 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    // ------------------------------------------------------------------ servers
+    private string SelectedServer(Manifest m) => ServerService.Resolve(m, _prefs.Server);
+
+    private void ShowServers(Manifest m)
+    {
+        _serverSource = m;
+        ServerOptions.Clear();
+        if (!ServerService.HasServers(m)) { ServersVisible = false; return; }
+        var sel = SelectedServer(m);
+        foreach (var s in ServerService.Visible(m))
+            ServerOptions.Add(new ServerOption(this, s, ServerService.DisplayName(s, Loc.Russian), s.Id == sel));
+        ServersVisible = ServerOptions.Count > 1;
+        AddLog($"Servers: {string.Join(", ", ServerOptions.Select(o => o.Id))}; selected {sel}");
+    }
+
+    private void RefreshServerNames()
+    {
+        foreach (var o in ServerOptions) o.Display = ServerService.DisplayName(o.Entry, Loc.Russian);
+    }
+
+    internal void SelectServer(string id)
+    {
+        if (Busy) { foreach (var o in ServerOptions) o.Refresh(); return; }
+        if (_prefs.Server != id)
+        {
+            _prefs.Server = id;
+            Settings.SavePrefs(_prefs);
+            AddLog($"Server -> {id}");
+        }
+        foreach (var o in ServerOptions) o.SetSelected(o.Id == id);
+    }
+
     private void OpenShell(string target)
     {
         try { if (!string.IsNullOrWhiteSpace(target)) Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
         catch (Exception ex) { AddLog("ERROR " + ex.Message); }
     }
+}
+
+public sealed class ServerOption : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private readonly MainViewModel _vm;
+    public ServerEntry Entry { get; }
+    public string Id => Entry.Id;
+    private string _display;
+    public string Display { get => _display; set { _display = value; PropertyChanged?.Invoke(this, new(nameof(Display))); } }
+    private bool _selected;
+    public bool IsSelected
+    {
+        get => _selected;
+        set { if (value) _vm.SelectServer(Id); else Refresh(); }
+    }
+    public ServerOption(MainViewModel vm, ServerEntry e, string display, bool selected) { _vm = vm; Entry = e; _display = display; _selected = selected; }
+    internal void SetSelected(bool v) { _selected = v; Refresh(); }
+    internal void Refresh() => PropertyChanged?.Invoke(this, new(nameof(IsSelected)));
 }

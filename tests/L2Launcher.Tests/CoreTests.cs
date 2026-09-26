@@ -234,9 +234,162 @@ public class EndToEndTests : IDisposable
         Assert.Equal(FileIntegrity.Sha256(fakeLauncher), m.Launcher.Sha256);
     }
 
+    string MakeServerDir(string id, string addr)
+    {
+        var d = Path.Combine(_work, "srv_" + id);
+        Directory.CreateDirectory(Path.Combine(d, "system"));
+        File.WriteAllText(Path.Combine(d, "system", "l2.ini"), $"[URL]\r\nServerAddr={addr}\r\n");
+        return d;
+    }
+
+    [Fact]
+    public async Task ServerSelection_EndToEnd()
+    {
+        var main = MakeServerDir("main", "80.78.246.62");
+        var local = MakeServerDir("local", "127.0.0.1");
+        var (svc, m, url, outDir, http) = await Serve($"--server main=\"{main}\" --server local=\"{local}\" --server-name \"main=Main|Основной сервер\"");
+        Assert.NotNull(m.Servers);
+        Assert.Equal("main", m.Servers!.Default);
+        Assert.Equal(new[] { "system/l2.ini" }, m.Servers.Files);
+        Assert.Equal(new[] { "main", "local" }, m.Servers.List.Select(x => x.Id));
+        Assert.Equal("Основной сервер", ServerService.DisplayName(m.Servers.List[0], true));
+        Assert.Equal("Local", ServerService.DisplayName(m.Servers.List[1], false));
+        var paths = m.Files.Select(f => f.Path.ToLowerInvariant()).ToList();
+        Assert.Contains("server/main/system/l2.ini", paths);
+        Assert.Contains("server/local/system/l2.ini", paths);
+        Assert.DoesNotContain("system/l2.ini", paths);
+
+        // players default to main; unknown/hidden prefs fall back to the default
+        Assert.Equal("main", ServerService.Resolve(m, ""));
+        Assert.Equal("main", ServerService.Resolve(m, "nope"));
+        Assert.Equal("local", ServerService.Resolve(m, "LOCAL"));
+
+        var game = Path.Combine(_work, "game");
+        var cache = HashCache.Load(null);
+        var v = svc.Verify(game, m, cache, false, null, default);
+        await svc.DownloadAsync(game, m, url, v.ToDownload.ToList(), cache, null, null, default);
+        var ini = Path.Combine(game, "system", "l2.ini");
+        Assert.Equal(1, ServerService.Apply(game, m, "main", cache));
+        Assert.Contains("80.78.246.62", File.ReadAllText(ini));
+        Assert.Equal("main", ServerService.ReadActive(game));
+        Assert.Equal(0, ServerService.Apply(game, m, "main", cache));           // unchanged -> no copy
+        Assert.Equal(1, ServerService.Apply(game, m, "local", cache));
+        Assert.Contains("127.0.0.1", File.ReadAllText(ini));
+        Assert.Equal("local", ServerService.ReadActive(game));
+        // someone replaced l2.ini while state says local -> detected by hash
+        File.Copy(Path.Combine(game, "server", "main", "system", "l2.ini"), ini, true);
+        Assert.Single(ServerService.Mismatched(game, m, "local", HashCache.Load(null), true));
+        Assert.Equal(1, ServerService.Apply(game, m, "local", HashCache.Load(null), null, true));
+        Assert.Contains("127.0.0.1", File.ReadAllText(ini));
+        // damaged source -> server_set_corrupt
+        File.WriteAllText(Path.Combine(game, "server", "main", "system", "l2.ini"), "tampered");
+        Assert.Equal("server_set_corrupt", Assert.Throws<LauncherException>(() => ServerService.Apply(game, m, "main", HashCache.Load(null), null, true)).Code);
+
+        // obsolete list never deletes the server target
+        m.Obsolete.Add("system/l2.ini");
+        Assert.Equal(0, LanguageService.DeleteObsolete(game, m));
+        Assert.True(File.Exists(ini));
+
+        // cache of the signed manifest round-trips and is re-verified
+        var dir = Path.Combine(_work, "appdata");
+        var raw = svc.LastRaw!.Value;
+        ManifestCache.Save(dir, url, raw.Bytes, raw.Sig);
+        Assert.Equal(2, ManifestCache.TryLoad(dir, url, svc)!.Servers!.List.Count);
+        Assert.Null(ManifestCache.TryLoad(dir, url + "x", svc));
+        var cf = Directory.GetFiles(Path.Combine(dir, "manifest_cache"), "*.json").Single();
+        var cb = File.ReadAllBytes(cf); cb[cb.Length / 2] ^= 1; File.WriteAllBytes(cf, cb);
+        Assert.Null(ManifestCache.TryLoad(dir, url, svc));
+    }
+
+    [Fact]
+    public async Task HiddenServer_NotVisible_AndBuildRejectsHiddenDefault()
+    {
+        var main = MakeServerDir("main", "1.2.3.4");
+        var local = MakeServerDir("local", "127.0.0.1");
+        var (svc, m, url, outDir, http) = await Serve($"--server main=\"{main}\" --server local=\"{local}\" --hide-server local");
+        Assert.Equal(new[] { "main" }, ServerService.Visible(m).Select(x => x.Id));
+        Assert.Equal("main", ServerService.Resolve(m, "local"));
+        var refc = Path.Combine(_work, "ref");
+        var ex = Assert.Throws<Exception>(() => Run("python3", $"\"{Root}/tools/build_manifest.py\" --client \"{refc}\" --server main=\"{main}\" --hide-server main --out \"{Path.Combine(_work, "o2")}\" --unsigned"));
+        Assert.Contains("hidden", ex.Message);
+    }
+
     public void Dispose()
     {
         try { _server?.Kill(true); } catch { }
         try { Directory.Delete(_work, true); } catch { }
+    }
+}
+
+public class ServerAndOptionTests
+{
+    static Manifest M(string def, bool localHidden = false) => new()
+    {
+        Format = 1,
+        Files =
+        {
+            new ManifestFile { Path = "server/main/system/l2.ini", Size = 1, Sha256 = new string('a', 64) },
+            new ManifestFile { Path = "server/local/system/l2.ini", Size = 1, Sha256 = new string('b', 64) },
+        },
+        Servers = new ServerInfo
+        {
+            Default = def, Files = { "system/l2.ini" },
+            List = { new ServerEntry { Id = "main" }, new ServerEntry { Id = "local", Hidden = localHidden } },
+        },
+    };
+
+    [Fact]
+    public void ValidateServers()
+    {
+        ServerService.Validate(M("main"), new HashSet<string>(M("main").Files.Select(f => PathSafety.Normalize(f.Path))));
+        var seen = new HashSet<string>(M("main").Files.Select(f => PathSafety.Normalize(f.Path)));
+        Assert.Throws<LauncherException>(() => ServerService.Validate(M("local", localHidden: true), seen)); // hidden default
+        Assert.Throws<LauncherException>(() => ServerService.Validate(M("other"), seen));                    // unknown default
+        var bad = M("main"); bad.Servers!.List.Add(new ServerEntry { Id = "../x" });
+        Assert.Throws<LauncherException>(() => ServerService.Validate(bad, seen));
+        var missing = M("main"); missing.Servers!.List.Add(new ServerEntry { Id = "third" });
+        Assert.Throws<LauncherException>(() => ServerService.Validate(missing, seen));                       // no server/third/...
+        var dup = new HashSet<string>(seen) { "system/l2.ini" };
+        Assert.Throws<LauncherException>(() => ServerService.Validate(M("main"), dup));                       // also a normal file
+        var prot = M("main"); prot.Servers!.Files = new() { "system/option.ini" };
+        Assert.Throws<LauncherException>(() => ServerService.Validate(prot, new HashSet<string> { "server/main/system/option.ini", "server/local/system/option.ini" }));
+    }
+
+    [Theory]
+    [InlineData("[Game]\r\nIsNative=True\r\nX=1\r\n", "[Game]\r\nIsNative=False\r\nX=1\r\n")]
+    [InlineData("[Game]\r\nIsNative=False\r\n", "[Game]\r\nIsNative=False\r\n")]
+    [InlineData("[Other]\r\nIsNative=True\r\n[Game]\r\nisnative = true \r\n", "[Other]\r\nIsNative=True\r\n[Game]\r\nisnative = False \r\n")]
+    [InlineData("[Game]\r\nA=1\r\n[Video]\r\nB=2", "[Game]\r\nIsNative=False\r\nA=1\r\n[Video]\r\nB=2")]
+    [InlineData("[Video]\nB=2", "[Video]\nB=2\n[Game]\nIsNative=False\n")]
+    [InlineData("", "[Game]\r\nIsNative=False\r\n")]
+    [InlineData("[Game]\r\nIsNative=1", "[Game]\r\nIsNative=False")]
+    public void PatchIsNative(string input, string expected) => Assert.Equal(expected, OptionIni.Patch(input));
+
+    [Fact]
+    public void EnsureIsNativeFalse_BytePreserving()
+    {
+        var dir = Directory.CreateTempSubdirectory("l2opt").FullName;
+        var sys = Path.Combine(dir, "system"); Directory.CreateDirectory(sys);
+        var f = Path.Combine(sys, "Option.ini");
+        // single-byte file with non-ASCII bytes must be preserved exactly except the value
+        var before = new byte[] { 0x5B, 0x47, 0x61, 0x6D, 0x65, 0x5D, 0x0D, 0x0A }  // [Game]\r\n
+            .Concat(System.Text.Encoding.ASCII.GetBytes("Name=")).Concat(new byte[] { 0xC0, 0xFF, 0x81 })
+            .Concat(System.Text.Encoding.ASCII.GetBytes("\r\nIsNative=True\r\n[Video]\r\nGamePlayViewportX=1920\r\n")).ToArray();
+        File.WriteAllBytes(f, before);
+        Assert.True(OptionIni.EnsureIsNativeFalse(dir));
+        var after = File.ReadAllBytes(f);
+        var expected = System.Text.Encoding.Latin1.GetBytes(System.Text.Encoding.Latin1.GetString(before).Replace("IsNative=True", "IsNative=False"));
+        Assert.Equal(expected, after);
+        Assert.False(OptionIni.EnsureIsNativeFalse(dir)); // idempotent, no rewrite
+        // UTF-16LE with BOM
+        var u = new byte[] { 0xFF, 0xFE }.Concat(System.Text.Encoding.Unicode.GetBytes("[Game]\r\nIsNative=True\r\n")).ToArray();
+        File.WriteAllBytes(f, u);
+        Assert.True(OptionIni.EnsureIsNativeFalse(dir));
+        Assert.Equal(new byte[] { 0xFF, 0xFE }.Concat(System.Text.Encoding.Unicode.GetBytes("[Game]\r\nIsNative=False\r\n")), File.ReadAllBytes(f));
+        // missing file -> created minimal
+        File.Delete(f);
+        Assert.True(OptionIni.EnsureIsNativeFalse(dir));
+        Assert.Equal("[Game]\r\nIsNative=False\r\n", File.ReadAllText(f));
+        Directory.Delete(dir, true);
     }
 }

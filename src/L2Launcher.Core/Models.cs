@@ -20,6 +20,28 @@ public sealed class Manifest
     [JsonProperty("languages")] public LanguageInfo? Languages { get; set; }
     /// <summary>Files from older layouts that the launcher deletes if present (e.g. Korea-slot *-k.dat).</summary>
     [JsonProperty("obsolete")] public List<string> Obsolete { get; set; } = new();
+    /// <summary>Selectable servers (see ServerService). Null = single server, no selection.</summary>
+    [JsonProperty("servers")] public ServerInfo? Servers { get; set; }
+}
+
+/// <summary>
+/// Each server's files live in "server/&lt;id&gt;/&lt;path&gt;" (normal manifest entries); "files" lists the target paths
+/// (e.g. "system/l2.ini") that receive a copy of the selected server's set.
+/// </summary>
+public sealed class ServerInfo
+{
+    [JsonProperty("default")] public string Default { get; set; } = "main";
+    [JsonProperty("files")] public List<string> Files { get; set; } = new();
+    [JsonProperty("list")] public List<ServerEntry> List { get; set; } = new();
+}
+
+public sealed class ServerEntry
+{
+    [JsonProperty("id")] public string Id { get; set; } = "";
+    /// <summary>Display names by UI language code ("en", "ru").</summary>
+    [JsonProperty("name")] public Dictionary<string, string> Name { get; set; } = new();
+    /// <summary>Hidden servers are not offered in the UI (e.g. "local" in production).</summary>
+    [JsonProperty("hidden")] public bool Hidden { get; set; }
 }
 
 /// <summary>

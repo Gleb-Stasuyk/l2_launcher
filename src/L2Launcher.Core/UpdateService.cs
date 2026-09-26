@@ -17,6 +17,9 @@ public sealed class UpdateService
         _http = http; _publicKeyPem = publicKeyPem;
     }
 
+    /// <summary>Raw bytes + signature of the last manifest fetched and verified (for ManifestCache).</summary>
+    public (byte[] Bytes, string Sig)? LastRaw { get; private set; }
+
     private void RequireSecure(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out _)) throw new LauncherException("bad_url", $"Invalid URL: {url}");
@@ -38,7 +41,9 @@ public sealed class UpdateService
                 var bust = (manifestUrl.Contains('?') ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks;
                 bytes = await _http.GetByteArrayAsync(manifestUrl + bust, ct);
                 sig = await _http.GetStringAsync(manifestUrl + ".sig" + bust, ct);
-                return ParseAndVerify(bytes, sig);
+                var parsed = ParseAndVerify(bytes, sig);
+                LastRaw = (bytes, sig);
+                return parsed;
             }
             catch (LauncherException) { throw; }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -77,6 +82,7 @@ public sealed class UpdateService
                         throw new LauncherException("bad_manifest", $"Language set '{code}' is missing {t}");
             }
         }
+        ServerService.Validate(m, seen);
         foreach (var o in m.Obsolete) PathSafety.ResolveSafePath(Path.GetTempPath(), o);
         return m;
     }

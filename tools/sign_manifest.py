@@ -25,6 +25,20 @@ def check(m):
             assert t.lower() not in seen, f"language target also a normal file: {t}"
             for c in lang["sets"]:
                 assert f"lang/{c}/{t}".lower() in seen, f"set {c} missing {t}"
+    srv = m.get("servers")
+    if srv:
+        ids = [x["id"] for x in srv["list"]]
+        assert ids and len(ids) == len(set(ids)), "server ids must be unique and non-empty"
+        for i in ids:
+            assert re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", i), f"bad server id {i}"
+        d = [x for x in srv["list"] if x["id"] == srv["default"]]
+        assert d and not d[0].get("hidden"), "default server missing or hidden"
+        ltargets = {t.lower() for t in (lang or {}).get("files", [])}
+        for t in srv["files"]:
+            assert t.lower() not in seen, f"server target also a normal file: {t}"
+            assert t.lower() not in ltargets, f"server target also a language file: {t}"
+            for i in ids:
+                assert f"server/{i}/{t}".lower() in seen, f"server {i} missing {t}"
     return len(seen)
 
 ap = argparse.ArgumentParser()

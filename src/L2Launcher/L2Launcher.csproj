@@ -11,8 +11,8 @@
     <RootNamespace>L2Launcher</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon Condition="Exists('icon.ico')">icon.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>L2 Launcher</Product>
     <AssemblyTitle>L2 Launcher</AssemblyTitle>

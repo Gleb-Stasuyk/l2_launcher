@@ -20,19 +20,22 @@ public sealed class LauncherConfig
     /// <summary>Allow Play when the update server is unreachable (the local client is then unverified).</summary>
     public bool AllowOfflinePlay { get; set; } = false;
     public bool CloseOnLaunch { get; set; } = true;
-    public string WebsiteUrl { get; set; } = "";
+    public string WebsiteUrl { get; set; } = BuildDefaults.WebsiteUrl;
 }
 
 /// <summary>Per-user preferences (%LOCALAPPDATA%\L2Launcher\prefs.json).</summary>
 public sealed class UserPrefs
 {
     public string Language { get; set; } = "";
+    /// <summary>Selected server id from manifest.servers ("" = manifest default).</summary>
+    public string Server { get; set; } = "";
 }
 
 public static class BuildDefaults
 {
     public const string ManifestUrl = "https://updates.example.com/l2/manifest.json";
     public const string ServerName = "Lineage II Interlude";
+    public const string WebsiteUrl = "https://l2start.ru";
 }
 
 public static class Settings

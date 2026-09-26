@@ -30,10 +30,12 @@ DEFAULT_EXCLUDES = [
     "system/option.ini", "system/user.ini", "system/windowsinfo.ini",
     "*.log", "*.part", "*.launcher.tmp", "*.bak", "*.tmp",
     "screenshot/*", "screenshots/*", "replay/*",
-    "enru_switch/*", "lang/*", "_backup_*/*", "_launcher_test_backup_*/*",
+    "enru_switch/*", "lang/*", "server/*", "_backup_*/*", "_launcher_test_backup_*/*",
     "l2launcher*.exe", "launcher.json", "*.exe.new",
     "thumbs.db", "desktop.ini",
 ]
+DEFAULT_SERVER_NAMES = {"main": {"en": "Main", "ru": "Основной сервер"},
+                        "local": {"en": "Local", "ru": "Локальный сервер"}}
 USER_CONFIG = ["system/Option.ini", "system/User.ini", "system/WindowsInfo.ini"]
 
 # From enru_switch/install_finish.bat
@@ -98,6 +100,14 @@ def main():
                          "the client become lang/en/<path> + lang/ru/<path>; the launcher copies the chosen set into place")
     ap.add_argument("--obsolete-enru", action="store_true",
                     help="list the Korea-slot files (system/*-k.dat etc.) as obsolete so launchers delete them")
+    ap.add_argument("--server", action="append", default=[], metavar="ID=DIR",
+                    help="selectable server: DIR holds its own versions of client files (e.g. DIR/system/l2.ini). "
+                         "Shipped as server/<ID>/<path>; the launcher copies the chosen one into place. Repeatable")
+    ap.add_argument("--server-name", action="append", default=[], metavar="ID=EN|RU",
+                    help='display names, e.g. "main=Main|Основной сервер" (defaults exist for main/local)')
+    ap.add_argument("--default-server", default=None, help="server selected for new players (default: main, else first)")
+    ap.add_argument("--hide-server", action="append", default=[], metavar="ID",
+                    help="keep the server in the manifest but do not offer it in the launcher (e.g. local in production)")
     ap.add_argument("--exclude", action="append", default=[], help="extra glob to exclude (relative, case-insensitive)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--key", default=str(ROOT / "keys" / "manifest_private.pem"))
@@ -157,6 +167,57 @@ def main():
         languages = {"default": "en", "sets": ["en", "ru"], "files": targets}
         print(f"  languages: {len(targets)} language-dependent files -> lang/en + lang/ru")
 
+    servers = None
+    if a.server:
+        import re
+        srv = []  # (id, dir)
+        for spec in a.server:
+            sid, _, d = spec.partition("=")
+            sid = sid.strip().lower()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", sid) or not d:
+                sys.exit(f"--server: bad spec {spec!r} (use ID=DIR, id = a-z 0-9 _ -)")
+            if any(sid == x for x, _ in srv):
+                sys.exit(f"--server: duplicate id {sid}")
+            if not Path(d).is_dir():
+                sys.exit(f"--server: {d} is not a folder")
+            srv.append((sid, Path(d)))
+        per = {}
+        for sid, d in srv:
+            per[sid] = {p.relative_to(d).as_posix().lower(): (p.relative_to(d).as_posix(), p)
+                        for p in sorted(d.rglob("*")) if p.is_file() and not p.is_symlink()}
+        keys = sorted(set().union(*[set(v) for v in per.values()]))
+        for sid in per:
+            miss = [k for k in keys if k not in per[sid]]
+            if miss:
+                sys.exit(f"--server {sid}: missing {miss} (every server must provide the same files)")
+        targets = []
+        for key in keys:
+            if key.startswith("lang/") or (languages and key in [t.lower() for t in languages["files"]]):
+                sys.exit(f"--server: {key} is a language file")
+            if excluded(key, DEFAULT_EXCLUDES[:3]):
+                sys.exit(f"--server: {key} is a protected user file")
+            disp = files.pop(key)[0] if key in files else per[srv[0][0]][key][0]
+            targets.append(disp)
+            for sid, _ in srv:
+                files[f"server/{sid}/{key}"] = (f"server/{sid}/{disp}", per[sid][key][1])
+        names = {sid: dict(DEFAULT_SERVER_NAMES.get(sid, {"en": sid, "ru": sid})) for sid, _ in srv}
+        for spec in a.server_name:
+            sid, _, nm = spec.partition("=")
+            sid = sid.strip().lower()
+            if sid not in names:
+                sys.exit(f"--server-name: unknown server {sid}")
+            en, _, ru = nm.partition("|")
+            names[sid] = {"en": en.strip() or sid, "ru": (ru or en).strip() or sid}
+        hidden = {h.strip().lower() for h in a.hide_server}
+        if hidden - set(names):
+            sys.exit(f"--hide-server: unknown {sorted(hidden - set(names))}")
+        default = (a.default_server or ("main" if "main" in names else srv[0][0])).lower()
+        if default not in names or default in hidden:
+            sys.exit(f"--default-server {default}: unknown or hidden")
+        servers = {"default": default, "files": targets,
+                   "list": [{"id": sid, "name": names[sid], "hidden": sid in hidden} for sid, _ in srv]}
+        print(f"  servers: {[x for x, _ in srv]} (default {default}, hidden {sorted(hidden)}) -> files {targets}")
+
     obsolete = []
     if a.obsolete_enru:
         obsolete = [f"system/{n}-k.dat" for n in ENRU_K_NAMES] + [k for _, k in ENRU_EXTRA]
@@ -199,6 +260,8 @@ def main():
         manifest["languages"] = languages
     if obsolete:
         manifest["obsolete"] = obsolete
+    if servers:
+        manifest["servers"] = servers
     if a.base_url:
         if not a.base_url.startswith("https://"):
             sys.exit("--base-url must be https://")
