@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Based on okuzpe/Lineage2Launcher (MIT, Copyright (c) 2025-2026 L2Titan). See LICENSE / NOTICE.md. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>L2Launcher</AssemblyName>
+    <RootNamespace>L2Launcher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon Condition="Exists('icon.ico')">icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>L2 Launcher</Product>
+    <AssemblyTitle>L2 Launcher</AssemblyTitle>
+    <Description>Lineage II Interlude launcher: update, integrity check, EN/RU language</Description>
+    <Copyright>Copyright (c) 2026 Gleb Stasyuk; portions (c) 2025-2026 L2Titan (MIT)</Copyright>
+    <NeutralLanguage>en</NeutralLanguage>
+    <!-- single-file, self-contained win-x64 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Compression: ~2x smaller exe (faster self-update) but some AVs flag compressed bundles.
+         Set to false if players report false positives. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en;ru</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <DebugType Condition="'$(Configuration)'=='Release'">none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\L2Launcher.Core\L2Launcher.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,8 @@
+bin/
+obj/
+out/
+dist/
+keys/manifest_private.pem
+*.user
+.vs/
+upstream/
