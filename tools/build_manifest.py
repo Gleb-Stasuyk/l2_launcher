@@ -187,7 +187,7 @@ def main():
     else:
         sign_file(out / "manifest.json", Path(a.key))
     print(f"manifest: {len(entries)} files, {total / 1048576:.1f} MiB, version {a.version}")
-    print(f"written:  {out / 'manifest.json'} (+ .sig){'' if a.no_copy else ' and files/'}")
+    print(f"written:  {out / 'manifest.json'}{'' if a.unsigned else ' (+ .sig)'}{'' if a.no_copy else ' and files/'}")
 
 
 if __name__ == "__main__":
