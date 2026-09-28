@@ -1,0 +1,52 @@
+
+    # --- L2Start launcher updates (signed manifest + client files) ---
+    location = /updates/manifest.json {
+        alias /var/www/l2start/updates/manifest.json;
+        default_type application/json;
+        add_header Cache-Control "no-cache" always;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    location = /updates/manifest.json.sig {
+        alias /var/www/l2start/updates/manifest.json.sig;
+        default_type text/plain;
+        add_header Cache-Control "no-cache" always;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # launcher self-update: fixed file name, must never be served stale
+    location ^~ /updates/files/launcher/ {
+        alias /var/www/l2start/updates/files/launcher/;
+        sendfile on;
+        tcp_nopush on;
+        autoindex off;
+        default_type application/octet-stream;
+        add_header Cache-Control "no-cache" always;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    location ^~ /updates/ {
+        alias /var/www/l2start/updates/;
+        sendfile on;
+        tcp_nopush on;
+        autoindex off;
+        default_type application/octet-stream;
+        add_header Cache-Control "public, max-age=86400" always;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # site downloads (server package, ini files) straight from disk
+    location ^~ /downloads/ {
+        alias /root/l2start_site/public/downloads/;
+        sendfile on;
+        tcp_nopush on;
+        autoindex off;
+        default_type application/octet-stream;
+        add_header Cache-Control "no-cache" always;
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
