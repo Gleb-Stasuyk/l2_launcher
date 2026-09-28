@@ -146,14 +146,19 @@ public class EndToEndTests : IDisposable
     {
         var refc = MakeRefClient();
         var outDir = Path.Combine(_work, "out");
-        Run("python3", $"\"{Root}/tools/build_manifest.py\" --client \"{refc}\" {extraArgs} --version test.1 --out \"{outDir}\"");
+        // The production private key is not kept in the repo/box: sign test manifests with a throwaway key.
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var keyFile = Path.Combine(_work, "test_private.pem");
+        File.WriteAllText(keyFile, rsa.ExportPkcs8PrivateKeyPem());
+        var pubPem = rsa.ExportSubjectPublicKeyInfoPem();
+        Run("python3", $"\"{Root}/tools/build_manifest.py\" --client \"{refc}\" {extraArgs} --version test.1 --out \"{outDir}\" --key \"{keyFile}\"");
         int port = FreePort();
         _server = Process.Start(new ProcessStartInfo("python3", $"-m http.server {port} --bind 127.0.0.1 --directory \"{outDir}\"")
             { RedirectStandardOutput = true, RedirectStandardError = true });
         var url = $"http://127.0.0.1:{port}/manifest.json";
         var http = new HttpClient();
         for (int i = 0; i < 50; i++) { try { await http.GetAsync(url); break; } catch { await Task.Delay(100); } }
-        var svc = new UpdateService(http);
+        var svc = new UpdateService(http, pubPem);
         return (svc, await svc.FetchManifestAsync(url, default), url, outDir, http);
     }
 
