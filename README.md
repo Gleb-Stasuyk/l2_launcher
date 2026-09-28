@@ -33,7 +33,7 @@ can serve files to your players can push code. If you lose it, ship a new launch
 Either edit `BuildDefaults.ManifestUrl` in `src/L2Launcher.Core/Settings.cs` and rebuild, or ship a
 `launcher.json` next to `L2Launcher.exe` (see `launcher.example.json`):
 ```json
-{ "ManifestUrl": "https://updates.example.com/l2/manifest.json", "ServerName": "L2 Interlude x100" }
+{ "ManifestUrl": "https://l2start.ru/updates/manifest.json", "ServerName": "L2Start" }
 ```
 The URL must be https (exception for local tests: plain `http://127.0.0.1` / `localhost` / `[::1]` is accepted; the signature is still required). Files are fetched from `<folder of manifest.json>/files/<path>`, unless the manifest has `baseUrl`.
 `GamePath` empty means the launcher's own folder, so put `L2Launcher.exe` into the client root (next to `system\`).

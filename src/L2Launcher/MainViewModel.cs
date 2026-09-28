@@ -37,6 +37,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"L2Launcher/{CurrentVersion}");
         _svc = new UpdateService(_http);
+        _svc.Notice = (name, attempt, max, msg) =>
+        {
+            AddLog($"NET {name}: {msg} -> reconnecting, attempt {attempt}/{max}");
+            Detail = Loc.F("S_Resume", name, attempt, max);
+        };
         _session = new LauncherSession(CheckCoreAsync, LaunchCoreAsync);
         PlayCommand = new RelayCommand(() => RunBusy(ct => _session.PlayAsync(ct)), () => !Busy);
         CheckCommand = new RelayCommand(() => RunBusy(ct => _session.CheckFilesAsync(ct)), () => !Busy);

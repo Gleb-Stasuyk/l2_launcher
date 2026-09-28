@@ -33,7 +33,7 @@ public sealed class UserPrefs
 
 public static class BuildDefaults
 {
-    public const string ManifestUrl = "https://updates.example.com/l2/manifest.json";
+    public const string ManifestUrl = "https://l2start.ru/updates/manifest.json";
     public const string ServerName = "L2Start";
     public const string WebsiteUrl = "https://l2start.ru";
 }

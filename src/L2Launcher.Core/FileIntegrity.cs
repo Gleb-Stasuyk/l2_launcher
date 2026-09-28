@@ -12,6 +12,8 @@ public static class FileIntegrity
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
+    public static string Sha256Bytes(byte[] data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+
     public static bool IsSha256Hex(string? s) =>
         s != null && s.Length == 64 && s.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
 }

@@ -33,14 +33,16 @@ public sealed class UpdateService
         RequireSecure(manifestUrl);
         byte[] bytes; string sig;
         Exception? last = null;
-        for (int attempt = 0; attempt < 3; attempt++)
+        for (int attempt = 0; attempt < 4; attempt++)
         {
             try
             {
                 if (attempt > 0) await Task.Delay(1500 * attempt, ct);
                 var bust = (manifestUrl.Contains('?') ? "&" : "?") + "t=" + DateTime.UtcNow.Ticks;
-                bytes = await _http.GetByteArrayAsync(manifestUrl + bust, ct);
-                sig = await _http.GetStringAsync(manifestUrl + ".sig" + bust, ct);
+                using var mcts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                mcts.CancelAfter(TimeSpan.FromSeconds(60));
+                bytes = await _http.GetByteArrayAsync(manifestUrl + bust, mcts.Token);
+                sig = await _http.GetStringAsync(manifestUrl + ".sig" + bust, mcts.Token);
                 var parsed = ParseAndVerify(bytes, sig);
                 LastRaw = (bytes, sig);
                 return parsed;
@@ -150,67 +152,153 @@ public sealed class UpdateService
         progress?.Report(new UpdateProgress(UpdateStage.Done, files.Count, files.Count, total, total, null));
     }
 
-    /// <summary>Downloads to "&lt;dest&gt;.part", verifies size+sha256, then atomically replaces dest.</summary>
+    // ---------------------------------------------------------------- resilient download settings
+    /// <summary>Bytes requested per HTTP Range request.</summary>
+    public long ChunkSize { get; set; } = 4L << 20;
+    /// <summary>No bytes received for this long = stalled connection: reconnect and resume.</summary>
+    public TimeSpan StallTimeout { get; set; } = TimeSpan.FromSeconds(8);
+    /// <summary>Max wait for response headers.</summary>
+    public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(20);
+    /// <summary>Consecutive failed attempts (without any new bytes) before giving up on a file.</summary>
+    public int MaxRetries { get; set; } = 10;
+    public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+    public TimeSpan RetryMaxDelay { get; set; } = TimeSpan.FromSeconds(20);
+    /// <summary>Human-readable notices (reconnects/resumes) for the log/status line: (file name, attempt, max, message).</summary>
+    public Action<string, int, int, string>? Notice { get; set; }
+
+    /// <summary>
+    /// Downloads to "&lt;dest&gt;.part" with HTTP Range chunks. A dropped or stalled connection (no bytes for
+    /// StallTimeout) is reopened and the download resumes from the last byte received, with exponential backoff
+    /// and at most MaxRetries consecutive attempts without progress. Servers that ignore Range (200) are handled
+    /// by restarting from 0. The finished file must match size + sha256, then it atomically replaces dest.
+    /// A leftover .part (e.g. after cancel) is resumed; if the result does not verify it is re-downloaded once from 0.
+    /// </summary>
     public async Task DownloadOneAsync(string url, string dest, string sha256, long expectedSize, Action<long>? onBytes, CancellationToken ct)
     {
         RequireSecure(url);
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
         var part = dest + ".part";
-        Exception? last = null;
-        for (int attempt = 0; attempt < 3; attempt++)
+        for (int pass = 0; pass < 2; pass++)
         {
-            try
-            {
-                if (attempt > 0) await Task.Delay(1000 * attempt, ct);
-                using (var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct))
-                {
-                    resp.EnsureSuccessStatusCode();
-                    await using var fs = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16);
-                    await using var s = await resp.Content.ReadAsStreamAsync(ct);
-                    var buf = new byte[1 << 16];
-                    long got = 0;
-                    while (true)
-                    {
-                        int n;
-                        using (var idle = CancellationTokenSource.CreateLinkedTokenSource(ct))
-                        {
-                            idle.CancelAfter(TimeSpan.FromSeconds(60));
-                            try { n = await s.ReadAsync(buf, idle.Token); }
-                            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                            { throw new IOException("Connection stalled"); }
-                        }
-                        if (n <= 0) break;
-                        await fs.WriteAsync(buf.AsMemory(0, n), ct);
-                        got += n;
-                        if (got > expectedSize) throw new HashMismatchException("File is larger than the manifest says");
-                        onBytes?.Invoke(got);
-                    }
-                }
-                var len = new FileInfo(part).Length;
-                if (len != expectedSize || !string.Equals(FileIntegrity.Sha256(part), sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new HashMismatchException($"Downloaded file does not match the manifest ({Path.GetFileName(dest)})");
-                if (File.Exists(dest))
-                {
-                    var a = File.GetAttributes(dest);
-                    if ((a & FileAttributes.ReadOnly) != 0) File.SetAttributes(dest, a & ~FileAttributes.ReadOnly);
-                }
-                File.Move(part, dest, overwrite: true);
-                return;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { TryDelete(part); throw; }
-            catch (HashMismatchException ex)
-            {
-                TryDelete(part);
-                throw new LauncherException("hash_mismatch", ex.Message, ex); // server-side problem: don't retry
-            }
+            bool resumed;
+            try { resumed = await FetchToPartAsync(url, part, expectedSize, onBytes, ct); }
             catch (UnauthorizedAccessException ex)
             {
                 TryDelete(part);
                 throw new LauncherException("access_denied", $"Cannot write {dest}. Close the game or run from a folder you can write to.", ex);
             }
-            catch (Exception ex) { last = ex; TryDelete(part); }
+            catch (HashMismatchException ex)
+            {
+                TryDelete(part);
+                throw new LauncherException("hash_mismatch", ex.Message, ex);
+            }
+            var len = new FileInfo(part).Length;
+            if (len == expectedSize && string.Equals(FileIntegrity.Sha256(part), sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (File.Exists(dest))
+                    {
+                        var a = File.GetAttributes(dest);
+                        if ((a & FileAttributes.ReadOnly) != 0) File.SetAttributes(dest, a & ~FileAttributes.ReadOnly);
+                    }
+                    File.Move(part, dest, overwrite: true);
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    throw new LauncherException("access_denied", $"Cannot write {dest}. Close the game or run from a folder you can write to.", ex);
+                }
+                return;
+            }
+            TryDelete(part);
+            if (!resumed) break; // fresh download that does not verify: server-side problem
         }
-        throw new LauncherException("download_failed", $"Download failed: {Path.GetFileName(dest)}: {last?.Message}", last);
+        throw new LauncherException("hash_mismatch", $"Downloaded file does not match the manifest ({Path.GetFileName(dest)})");
+    }
+
+    /// <summary>Fills <paramref name="part"/> up to expectedSize. Returns true if it resumed an existing partial file.</summary>
+    private async Task<bool> FetchToPartAsync(string url, string part, long size, Action<long>? onBytes, CancellationToken ct)
+    {
+        var name = Path.GetFileName(part.EndsWith(".part") ? part[..^5] : part);
+        await using var fs = new FileStream(part, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1 << 16);
+        long pos = fs.Length;
+        bool resumed = pos > 0 && pos <= size;
+        if (!resumed) pos = 0;
+        fs.SetLength(pos);
+        fs.Position = pos;
+        if (pos > 0) onBytes?.Invoke(pos);
+        bool useRange = true;
+        int failures = 0;
+        var buf = new byte[1 << 16];
+        while (pos < size)
+        {
+            ct.ThrowIfCancellationRequested();
+            long progressAtStart = pos;
+            try
+            {
+                long end = useRange ? Math.Min(pos + ChunkSize, size) - 1 : size - 1;
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                if (useRange) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(pos, end);
+                HttpResponseMessage resp;
+                using (var hcts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    hcts.CancelAfter(ConnectTimeout);
+                    try { resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, hcts.Token); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new IOException("No response from server"); }
+                }
+                using (resp)
+                {
+                    var code = (int)resp.StatusCode;
+                    if (code == 206)
+                    {
+                        var cr = resp.Content.Headers.ContentRange;
+                        if (cr?.From != null && cr.From != pos) throw new IOException($"Server resumed at {cr.From}, expected {pos}");
+                    }
+                    else if (code == 200)
+                    {
+                        if (pos > 0) { pos = 0; fs.SetLength(0); fs.Position = 0; onBytes?.Invoke(0); }
+                        useRange = false; end = size - 1;
+                    }
+                    else if (code == 416) throw new HashMismatchException($"File on the server is smaller than the manifest says ({name})");
+                    else if (code == 408 || code == 429 || code >= 500) throw new IOException($"HTTP {code}");
+                    else throw new LauncherException("download_failed", $"Download failed: {name}: HTTP {code}");
+
+                    await using var s = await resp.Content.ReadAsStreamAsync(ct);
+                    while (pos <= end)
+                    {
+                        int n;
+                        using (var idle = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                        {
+                            idle.CancelAfter(StallTimeout);
+                            try { n = await s.ReadAsync(buf.AsMemory(0, (int)Math.Min(buf.Length, end - pos + 1)), idle.Token); }
+                            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                            { throw new IOException($"Connection stalled (no data for {StallTimeout.TotalSeconds:0} s)"); }
+                        }
+                        if (n <= 0) break;
+                        await fs.WriteAsync(buf.AsMemory(0, n), ct);
+                        pos += n;
+                        onBytes?.Invoke(pos);
+                    }
+                    if (pos <= end) throw new IOException("Connection closed early");
+                    if (!useRange && pos < size) throw new IOException("Connection closed early");
+                }
+                failures = 0;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { await fs.FlushAsync(CancellationToken.None); throw; }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or TimeoutException or OperationCanceledException)
+            {
+                await fs.FlushAsync(CancellationToken.None);
+                if (pos > progressAtStart) failures = 0;
+                failures++;
+                if (failures > MaxRetries)
+                    throw new LauncherException("download_failed", $"Download failed: {name}: {ex.Message}", ex);
+                Notice?.Invoke(name, failures, MaxRetries, ex.Message);
+                var delay = TimeSpan.FromMilliseconds(Math.Min(RetryMaxDelay.TotalMilliseconds, RetryBaseDelay.TotalMilliseconds * Math.Pow(2, failures - 1)));
+                await Task.Delay(delay, ct);
+            }
+        }
+        await fs.FlushAsync(ct);
+        return resumed;
     }
 
     internal static void TryDelete(string p) { try { if (File.Exists(p)) File.Delete(p); } catch { } }

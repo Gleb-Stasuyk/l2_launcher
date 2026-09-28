@@ -1,5 +1,5 @@
 {
-  "ManifestUrl": "https://updates.example.com/l2/manifest.json",
+  "ManifestUrl": "https://l2start.ru/updates/manifest.json",
   "ServerName": "L2Start",
   "GamePath": "",
   "GameExecutable": "system/l2.exe",
