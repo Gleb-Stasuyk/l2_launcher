@@ -10,6 +10,14 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (e.Args.Contains("--local"))
+        {
+            // headless smoke mode (no window): result in %LOCALAPPDATA%\L2Launcher\cli.txt
+            var (code, output) = Task.Run(() => Core.Local.LocalCli.RunAsync(e.Args)).GetAwaiter().GetResult(); // off the UI context (no deadlock)
+            try { Directory.CreateDirectory(Settings.LocalDataDir); File.WriteAllText(Path.Combine(Settings.LocalDataDir, "cli.txt"), output); } catch { }
+            Shutdown(code);
+            return;
+        }
         _mutex = new Mutex(true, @"Local\L2Launcher_SingleInstance", out bool created);
         if (!created)
         {
