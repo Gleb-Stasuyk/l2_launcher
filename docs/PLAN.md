@@ -1,6 +1,15 @@
 # L2Start Local — implementation plan (launcher 1.4 + downloadable server package)
 
-Status: draft for approval. Nothing below is implemented yet (only the 1.3.0 sources are in `main`).
+Status: approved by Gleb 2026-10-23 with the decisions below. Checkpoints 1–2 in progress (l2start-server branch `feature/local-package`).
+
+## Decisions (Gleb, 2026-10-23)
+1. Server image: **public GHCR** `ghcr.io/gleb-stasuyk/l2start-server:<ver>` (`docker compose pull` in install.bat; a local `image/l2start-server.tar` is loaded instead when present, for offline/test).
+2. Geodata is shipped publicly in the Release (inside the server package, `geodata/`).
+3. Admin: GM access level **100** only.
+4. Auto-profession: **class-choice dialog at 20/40/76** — stock Mobius ClassMaster popup (`config/ClassMaster.xml`, `showPopupWindow`), free, per profession 1/2/3.
+5. GM shop: **stock Mobius** community-board shop, on/off only (`CommunityEnableMultisells`).
+6. Client patch: updated via the signed manifest once the VPS is back (until then embedded in the launcher release).
+7. NEW: stock Mobius buffer (community board + Scheme Buffer NPC) on/off + buff duration setting.
 
 ## 0. Goal
 A player downloads two things from GitHub Releases (VPS is off, l2start.ru/updates untouched):
@@ -30,16 +39,19 @@ Base files: `core/dist/game/config/*.ini` (L2J Mobius CT_0 Interlude) overridden
 | Quest | Rates.ini | `RateQuestRewardXP/SP/Adena`, `RateQuestReward*` | yes |
 | Manor | Rates.ini | `RateDropManor` | yes |
 | (conflict) | module `rates-floating` | must be off or respect fixed rates in local profile | check |
-| Auto-learn skills up to level N | Player.ini `AutoLearnSkills=True` (+`AutoLearnSkillsWithoutItems`, `AutoLearnForgottenScrollSkills`); level cap via bots/player module key `AutoLearnMaxLevel` | partly: Mobius has no level cap for players -> **new** small hook in a module (e.g. `starter-kit`) |
-| Auto class change 1/2/3 | **new module `class-master`**: on level 20/40/76 offer/perform change (dialog with class choice, no quest/items); keys `Enabled`, `Change1`, `Change2`, `Change3`, `Free=true` | **new** (Mobius Interlude ClassMaster config not present in this tree) |
+| Auto-learn skills up to level N | module `return-skill` key `AutoLearnMaxLevel` (0 = off, live players only) -> `modules.env` `L2_MOD_RETURN_SKILL__AUTOLEARNMAXLEVEL=N`; stock `AutoLearnSkills` stays False | **exists** (no new code) |
+| Auto class change 1/2/3 | `settings.env` `L2S_CLASS_MASTER=off\|1,2,3` -> entrypoint generates `config/ClassMaster.xml` (`classChangeEnabled`, `showPopupWindow=true`, `spawnClassMasters=false`, one free `classChangeOption` per FIRST/SECOND/THIRD_CLASS_GROUP) | stock script `ai/others/ClassMaster` (popup = tutorial question mark at 20/40/76); wiring **new** |
 | Subclass without quest | Player.ini `AltSubClassWithoutQuests` | yes |
-| Catacomb/necropolis entry without Seven Signs | Feature.ini `AltOpenNecropolis` (verify it also covers catacombs in CT_0) ; `StrictSevenSigns=False` | partly; if catacombs not covered -> **new** hook in `lw-fixes` |
-| Admin rights | DB `characters.accesslevel` (0 / 100 GM, levels from `config/AccessLevels.xml`) via `docker exec l2s-db mariadb ...`; character list from `SELECT char_name, level, accesslevel FROM characters` | yes (DB), launcher **new** |
+| Catacomb/necropolis entry without Seven Signs | Feature.ini `AltOpenCatacumbs`, `AltOpenNecropolis` (DungeonGatekeeper checks), `StrictSevenSigns=False` (Mammon) | **exists** (stock) |
+| Admin rights | DB `characters.accesslevel` (0 or 100 GM only) via `docker exec l2s-db mariadb ...`; character list from `SELECT char_name, level, accesslevel FROM characters` | yes (DB), launcher **new** |
 | Bots on/off, max | modules.env `L2_MODULE_BOTS_CORE=on/off`, `L2_MOD_BOTS_CORE__MAXBOTS` | yes |
 | Town / spot density | `bots-core` keys (see docs/BOTS_DENSITY.md), `DirectorPoolReserve` | yes, names to confirm |
 | PK bots, RB parties, traders | `bots-*` keys (`RbParty`, PvP/PK flag, trader count; economy-market module on/off) | yes, names to confirm |
-| Buffer | module `town-buffer` on/off; SchemeBuffer.ini | yes |
-| GM shop | community board / GM shop module (`CommunityBoard.ini`) | check, maybe **new** multisell |
+| Bot buffers (ours) | module `town-buffer` on/off (`L2_MODULE_TOWN_BUFFER`) | yes |
+| Stock buffer: community board | Custom/CommunityBoard.ini `CommunityEnableBuffs`, `CommunityBuffPrice`, list `CommunityAvailableBuffs` | stock |
+| Stock buffer: NPC | `settings.env` `L2S_STOCK_NPC_BUFFER=on/off` -> spawn file `data/spawns/Others/l2start_scheme_buffer.xml` with stock NPC 50008 "Thiago" (Scheme Buffer) at the GKs of Gludio/Dion/Giran/Aden/Goddard; Custom/SchemeBuffer.ini (`BufferStaticCostPerBuff`, schemes) | NPC stock, spawn wiring **new** |
+| Buff duration (stock buffers) | `settings.env` `L2S_BUFF_DURATION=<sec>` -> Player.ini `EnableModifySkillDuration=True` + `SkillDurationList` for every id in `CommunityAvailableBuffs` + `data/SchemeBufferSkills.xml` (note: global per skill id, so the same buffs cast by players/bots also last that long) | stock keys, wiring **new** |
+| GM shop | stock: Custom/CommunityBoard.ini `CommunityEnableMultisells` on/off | stock |
 | Enchant max / chance | `data/EnchantItemData.xml` (max) + Character/Player enchant rates; override via data override | check: data override path may be needed in entrypoint (**new**) |
 | Start level / adena | Player.ini `StartingLevel`, `StartingAdena` | yes |
 | Return skill | module `return-skill` on/off | yes |
@@ -55,7 +67,7 @@ Launcher stores its state in `<server>\launcher-local.json` (chosen values) and 
 ### Step 1 — server: `local` profile + release image (l2start-server repo)
 - `docker/profiles/local.env`: `L2S_PROFILE=local`, `L2S_BIND=127.0.0.1`, random DB password generated by install.bat into `.env`.
 - compose for release: `image: ghcr.io/gleb-stasuyk/l2start-server:<ver>` without `build:` (separate `docker-compose.release.yml`).
-- Image delivery: `docker save | zstd` tar attached to the Release (works without registry login) — GHCR optional later.
+- Image delivery: public GHCR (`docker compose pull`); `tools/build-local-package.ps1 -SaveImage` can put a tar in `image/` for offline/test.
 - Geodata in the package (`geodata/`), `L2S_GEODATA_DIR=./geodata`.
 - Clean DB: db-init on empty volume only; confirm no Gleb accounts/characters in SQL seed; bots are generated at runtime.
 - `install.bat`: check `docker version` / Docker Desktop running -> else open download page; `docker load`; `docker compose up -d`; wait for health.
@@ -92,9 +104,5 @@ Launcher stores its state in `<server>\launcher-local.json` (chosen values) and 
 - Manual: Gleb's single in-game pass after checkpoint 4.
 
 ## 5. Open questions
-1. Image distribution: Release asset tar (~1–2 GB, GitHub limit 2 GB per file) vs public GHCR image? Proposal: tar now.
-2. Geodata licence/size ok to redistribute in the Release?
-3. Admin: is GM level 100 enough, or also lower "moderator" levels in the UI?
-4. Auto-profession: automatic or via dialog with class choice (proposal: dialog on 20/40/76)?
-5. GM shop: which items/prices (existing multisell or new)?
-6. Keep updating the client patch through the signed manifest later when the VPS returns?
+- Resolved 2026-10-23 (see Decisions).
+- Remaining: player-facing buff duration also affects the same buffs cast by players (stock key is per skill id) — acceptable?
