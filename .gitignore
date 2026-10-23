@@ -7,3 +7,13 @@ keys/manifest_private.pem
 .vs/
 upstream/
 __pycache__/
+# secrets: never commit signing keys / tokens
+keys/*private*
+*.pfx
+*.p12
+*.snk
+*.key
+.env
+*.env
+secrets/
+launcher.json
