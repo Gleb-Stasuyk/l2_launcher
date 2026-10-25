@@ -144,6 +144,7 @@ public sealed class Loc : INotifyPropertyChanged
         ["L_PickChar"] = ("Select a character first.", "Сначала выберите персонажа."),
         ["L_GmOn"] = ("{0} is GM now (relog).", "{0} теперь GM (перезайдите)."),
         ["L_GmOff"] = ("{0} is a normal player now.", "{0} теперь обычный игрок."),
+        ["E_char_online"] = ("Character is online. Log out first, then grant GM again.", "Персонаж в игре. Выйдите из игры, затем выдайте GM снова."),
         ["S_Backup"] = ("Back up the database", "Бэкап базы"),
         ["S_Restore"] = ("Restore from backup…", "Восстановить из бэкапа…"),
         ["S_Reset"] = ("Reset the world…", "Сбросить мир…"),

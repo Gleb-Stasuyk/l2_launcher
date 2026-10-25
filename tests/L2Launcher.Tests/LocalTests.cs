@@ -180,10 +180,63 @@ public class LocalTests
         Assert.Equal("UPDATE characters SET accesslevel=100 WHERE char_name='Ork'; SELECT ROW_COUNT();", DbService.AccessSql("Ork", 100));
         Assert.Throws<LauncherException>(() => DbService.AccessSql("x'; DROP TABLE characters;--", 100));
         Assert.Throws<LauncherException>(() => DbService.AccessSql("Ork", 50));
-        var f = new FakeRunner { Answer = _ => new ProcResult(0, "1\n", "") };
+        var callCount = 0;
+        var f = new FakeRunner
+        {
+            Answer = _ =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new ProcResult(0, "0\n", "")  // online check: offline
+                    : new ProcResult(0, "1\n", ""); // UPDATE successful
+            }
+        };
         Assert.True(await new DbService(f, ServerFolder()).SetAccessLevelAsync("Ork", 100));
         Assert.Contains("exec -i l2l-db", f.Calls[0].args);
-        Assert.Contains("accesslevel=100", f.Calls[0].stdin);
+        Assert.Contains("SELECT online", f.Calls[0].stdin);
+        Assert.Contains("accesslevel=100", f.Calls[1].stdin);
+    }
+
+    [Fact]
+    public async Task DbRejectsGrantingGmToOnlineCharacter()
+    {
+        // First call checks online status, returns "1" (online)
+        var callCount = 0;
+        var f = new FakeRunner
+        {
+            Answer = _ =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new ProcResult(0, "1\n", "")  // online check: character is online
+                    : new ProcResult(0, "1\n", ""); // would be the UPDATE call (not reached)
+            }
+        };
+        var ex = await Assert.ThrowsAsync<LauncherException>(() => new DbService(f, ServerFolder()).SetAccessLevelAsync("Ork", 100));
+        Assert.Equal("char_online", ex.Code);
+        Assert.Contains("Ork", ex.Message);
+        Assert.Equal(1, callCount); // Only the online check should have been called
+        Assert.Contains("SELECT online", f.Calls[0].stdin);
+    }
+
+    [Fact]
+    public async Task DbAllowsGrantingGmToOfflineCharacter()
+    {
+        var callCount = 0;
+        var f = new FakeRunner
+        {
+            Answer = _ =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new ProcResult(0, "0\n", "")  // online check: character is offline
+                    : new ProcResult(0, "1\n", ""); // UPDATE successful
+            }
+        };
+        Assert.True(await new DbService(f, ServerFolder()).SetAccessLevelAsync("Ork", 100));
+        Assert.Equal(2, callCount); // Both online check and UPDATE should have been called
+        Assert.Contains("SELECT online", f.Calls[0].stdin);
+        Assert.Contains("accesslevel=100", f.Calls[1].stdin);
     }
 
     [Fact]

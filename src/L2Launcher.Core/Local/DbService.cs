@@ -48,8 +48,15 @@ public sealed class DbService
     }
 
     /// <summary>Takes effect at the next login of the character.</summary>
-    public async Task<bool> SetAccessLevelAsync(string name, int level, CancellationToken ct = default) =>
-        (await SqlAsync(AccessSql(name, level), ct)).Trim() == "1";
+    public async Task<bool> SetAccessLevelAsync(string name, int level, CancellationToken ct = default)
+    {
+        // Check if character is online before applying (GM rights don't take effect while logged in)
+        var online = await SqlAsync($"SELECT online FROM characters WHERE char_name='{name}';", ct);
+        if (online.Trim() == "1")
+            throw new LauncherException("char_online", $"Character {name} is currently online");
+        
+        return (await SqlAsync(AccessSql(name, level), ct)).Trim() == "1";
+    }
 
     public string BackupDir => Path.Combine(_folder, "backups");
 

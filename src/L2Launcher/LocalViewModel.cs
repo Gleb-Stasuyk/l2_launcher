@@ -204,7 +204,12 @@ public sealed class LocalViewModel : INotifyPropertyChanged
             _main.Status = ok ? Loc.F(level > 0 ? "L_GmOn" : "L_GmOff", c.Name) : Loc.F("S_Error", c.Name);
             await LoadCharactersAsync(ct);
         }
-        catch (LauncherException ex) { _main.Status = Loc.F("S_Error", ex.Message); }
+        catch (LauncherException ex)
+        {
+            _main.AddLog($"ERROR [{ex.Code}] {ex.Message}");
+            var key = "E_" + ex.Code;
+            _main.Status = Loc[key] == key ? Loc.F("S_Error", ex.Message) : Loc[key];
+        }
     }
 
     private async Task<string?> DoBackupAsync(CancellationToken ct)
