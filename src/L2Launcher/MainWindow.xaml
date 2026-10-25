@@ -66,12 +66,12 @@
                     <Grid Margin="12">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                         <DockPanel Grid.Row="0">
-                            <TextBlock Text="{Binding Loc[L_Folder]}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{Binding Loc[L_Folder]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <Button DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="{Binding Loc[L_OpenFolder]}" Command="{Binding Local.OpenFolderCommand}"/>
                             <Button DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="{Binding Loc[L_Browse]}" Command="{Binding Local.BrowseCommand}"/>
                             <TextBox IsReadOnly="True" Text="{Binding Local.Folder, Mode=OneWay}"/>
                         </DockPanel>
-                        <TextBlock Grid.Row="1" Margin="0,10" FontSize="14" Text="{Binding Local.StateText}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="1" Margin="0,10" FontSize="14" Foreground="{StaticResource Fg}" Text="{Binding Local.StateText}" TextWrapping="Wrap"/>
                         <WrapPanel Grid.Row="2">
                             <Button Style="{StaticResource Btn}" Content="{Binding Loc[L_Start]}" Command="{Binding Local.StartCommand}"/>
                             <Button Style="{StaticResource Btn}" Content="{Binding Loc[L_Stop]}" Command="{Binding Local.StopCommand}"/>
@@ -89,14 +89,14 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12" MaxWidth="640" HorizontalAlignment="Left">
                             <CheckBox Margin="0,4" Content="{Binding Loc[R_Floating]}" IsChecked="{Binding Local.S.FloatingDrop}"/>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateXp, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Xp]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateSp, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Sp]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateAdena, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Adena]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateDrop, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Drop]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateSpoil, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Spoil]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateRaid, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Raid]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateQuest, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Quest]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateManor, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Manor]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateXp, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Xp]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateSp, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Sp]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateAdena, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Adena]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateDrop, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Drop]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateSpoil, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Spoil]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateRaid, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Raid]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateQuest, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Quest]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.RateManor, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[R_Manor]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <TextBlock Margin="0,10,0,0" Foreground="{StaticResource Muted}" Text="{Binding Loc[L_ApplyHint]}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </ScrollViewer>
@@ -104,14 +104,14 @@
                 <TabItem Header="{Binding Loc[T_Char]}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12" MaxWidth="640" HorizontalAlignment="Left">
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.AutoLearnMaxLevel, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_AutoLearn]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.AutoLearnMaxLevel, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_AutoLearn]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <CheckBox Margin="0,4" Content="{Binding Loc[C_Class1]}" IsChecked="{Binding Local.S.ClassChange1}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[C_Class2]}" IsChecked="{Binding Local.S.ClassChange2}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[C_Class3]}" IsChecked="{Binding Local.S.ClassChange3}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[C_Sub]}" IsChecked="{Binding Local.S.SubclassWithoutQuest}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[C_Cata]}" IsChecked="{Binding Local.S.OpenCatacombs}"/>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.StartLevel, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_StartLevel]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.StartAdena, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_StartAdena]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.StartLevel, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_StartLevel]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.StartAdena, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[C_StartAdena]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <TextBlock Margin="0,10,0,0" Foreground="{StaticResource Muted}" Text="{Binding Loc[L_ApplyHint]}" TextWrapping="Wrap"/>
                         </StackPanel>
                     </ScrollViewer>
@@ -120,9 +120,9 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12" MaxWidth="640" HorizontalAlignment="Left">
                             <CheckBox Margin="0,4" Content="{Binding Loc[B_Enabled]}" IsChecked="{Binding Local.S.BotsEnabled}"/>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.BotsMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Max]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.TownDensity, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Town]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.SpotMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Spot]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.BotsMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Max]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.TownDensity, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Town]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.SpotMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[B_Spot]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <CheckBox Margin="0,4" Content="{Binding Loc[B_Pk]}" IsChecked="{Binding Local.S.PkBots}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[B_Rb]}" IsChecked="{Binding Local.S.RbParties}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[B_Traders]}" IsChecked="{Binding Local.S.Traders}"/>
@@ -136,10 +136,10 @@
                             <CheckBox Margin="0,4" Content="{Binding Loc[G_BotBuff]}" IsChecked="{Binding Local.S.BotBuffers}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[G_CbBuff]}" IsChecked="{Binding Local.S.CommunityBuffer}"/>
                             <CheckBox Margin="0,4" Content="{Binding Loc[G_NpcBuff]}" IsChecked="{Binding Local.S.NpcBuffer}"/>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.BuffDurationMinutes, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_BuffMin]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.BuffDurationMinutes, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_BuffMin]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <CheckBox Margin="0,4" Content="{Binding Loc[G_Shop]}" IsChecked="{Binding Local.S.GmShop}"/>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.EnchantMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_EnchMax]}" VerticalAlignment="Center"/></DockPanel>
-                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.EnchantChance, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_EnchChance]}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.EnchantMax, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_EnchMax]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
+                            <DockPanel Margin="0,3"><TextBox DockPanel.Dock="Right" Width="110" Text="{Binding Local.S.EnchantChance, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding Loc[G_EnchChance]}" Foreground="{StaticResource Fg}" VerticalAlignment="Center"/></DockPanel>
                             <CheckBox Margin="0,4" Content="{Binding Loc[G_Return]}" IsChecked="{Binding Local.S.ReturnSkill}"/>
                             <TextBlock Margin="0,10,0,0" Foreground="{StaticResource Muted}" Text="{Binding Loc[L_ApplyHint]}" TextWrapping="Wrap"/>
                         </StackPanel>
@@ -183,7 +183,7 @@
 
         <!-- status -->
         <StackPanel Grid.Row="2">
-            <TextBlock Text="{Binding Status}" FontSize="14" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding Status}" FontSize="14" Foreground="{StaticResource Fg}" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" Margin="0,2,0,6"/>
             <ProgressBar Height="10" Minimum="0" Maximum="100" Value="{Binding Progress}" IsIndeterminate="{Binding Indeterminate}"
                          Foreground="{StaticResource Accent}" Background="#2B303A" BorderThickness="0"/>
