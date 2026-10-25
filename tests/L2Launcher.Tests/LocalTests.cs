@@ -119,6 +119,7 @@ public class LocalTests
         var feat = IniKeys.Parse(File.ReadAllText(Path.Combine(cfg, "Feature.ini")));
         Assert.Equal("True", feat["AltOpenCatacumbs"]);
         var cb = IniKeys.Parse(File.ReadAllText(Path.Combine(cfg, "Custom", "CommunityBoard.ini")));
+        Assert.Equal("False", cb["CustomCommunityBoard"]);
         Assert.Equal("False", cb["CommunityEnableBuffs"]);
         Assert.Equal("False", cb["CommunityEnableMultisells"]);
         // round trip
@@ -136,6 +137,35 @@ public class LocalTests
     [Fact]
     public void ClassMasterOffWhenNoneChecked() =>
         Assert.Equal("off", LocalConfigWriter.SettingsEnv(new LocalSettings { ClassChange1 = false, ClassChange2 = false, ClassChange3 = false })["L2S_CLASS_MASTER"]);
+
+    [Fact]
+    public void CustomCommunityBoardEnabledWhenFeaturesAreUsed()
+    {
+        // both off -> CustomCommunityBoard=False
+        var both_off = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = false, GmShop = false });
+        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
+        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
+        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+
+        // buffer on -> CustomCommunityBoard=True
+        var buff_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = true, GmShop = false });
+        Assert.Equal("True", buff_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
+        Assert.Equal("True", buff_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
+        Assert.Equal("False", buff_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+
+        // shop on -> CustomCommunityBoard=True
+        var shop_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = false, GmShop = true });
+        Assert.Equal("True", shop_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
+        Assert.Equal("False", shop_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
+        Assert.Equal("True", shop_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+
+        // both on -> CustomCommunityBoard=True
+        var both_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = true, GmShop = true });
+        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
+        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
+        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+    }
+
 
     [Fact]
     public void NormalizeClamps()

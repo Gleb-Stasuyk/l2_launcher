@@ -159,7 +159,9 @@ public static class LocalConfigWriter
             },
             [Path.Combine("Custom", "CommunityBoard.ini")] = new()
             {
-                ["CommunityEnableBuffs"] = B(s.CommunityBuffer), ["CommunityEnableMultisells"] = B(s.GmShop),
+                ["CustomCommunityBoard"] = B(s.CommunityBuffer || s.GmShop),
+                ["CommunityEnableBuffs"] = B(s.CommunityBuffer),
+                ["CommunityEnableMultisells"] = B(s.GmShop),
             },
         };
     }
