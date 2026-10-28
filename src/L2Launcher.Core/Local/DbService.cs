@@ -5,17 +5,23 @@ namespace L2Launcher.Core.Local;
 
 public sealed record CharacterRow(string Name, int Level, int AccessLevel, string Account, bool Online);
 
-/// <summary>Database of the local server through the l2l-db container (no host port, password from the container env).</summary>
+/// <summary>Database of the local server through the db container (l2l-db or l2s-db; no host port, password from the container env).</summary>
 public sealed class DbService
 {
     public const int GmLevel = 100;
     private static readonly Regex NameRx = new("^[A-Za-z0-9]{1,16}$");
     private readonly IProcessRunner _run;
     private readonly string _folder;
-    public DbService(IProcessRunner run, string folder) { _run = run; _folder = folder; }
+    private readonly string _dbContainer;
+    public DbService(IProcessRunner run, string folder)
+    {
+        _run = run;
+        _folder = folder;
+        _dbContainer = DockerService.DbContainerFor(DockerService.DetectKind(folder) ?? ServerPackageKind.Release);
+    }
 
-    private static readonly string[] Mariadb =
-        { "exec", "-i", DockerService.DbContainer, "sh", "-c", "mariadb -uroot -p\"$MARIADB_ROOT_PASSWORD\" -N -B l2start" };
+    private string[] Mariadb =>
+        new[] { "exec", "-i", _dbContainer, "sh", "-c", "mariadb -uroot -p\"$MARIADB_ROOT_PASSWORD\" -N -B l2start" };
 
     private async Task<string> SqlAsync(string sql, CancellationToken ct)
     {
@@ -66,7 +72,7 @@ public sealed class DbService
         var file = Path.Combine(BackupDir, $"l2l-{DateTime.Now:yyyyMMdd-HHmmss}.sql.gz");
         await using (var fs = File.Create(file))
         {
-            var r = await _run.RunAsync("docker", new[] { "exec", DockerService.DbContainer, "sh", "-c",
+            var r = await _run.RunAsync("docker", new[] { "exec", _dbContainer, "sh", "-c",
                 "mariadb-dump -uroot -p\"$MARIADB_ROOT_PASSWORD\" --single-transaction --routines --triggers l2start | gzip -c" }, stdoutTo: fs, ct: ct);
             if (!r.Ok) { fs.Close(); File.Delete(file); throw new LauncherException("backup_failed", r.Stderr.Trim()); }
         }
@@ -78,7 +84,7 @@ public sealed class DbService
     public async Task RestoreAsync(string file, CancellationToken ct = default)
     {
         await using var fs = File.OpenRead(file);
-        var r = await _run.RunAsync("docker", new[] { "exec", "-i", DockerService.DbContainer, "sh", "-c",
+        var r = await _run.RunAsync("docker", new[] { "exec", "-i", _dbContainer, "sh", "-c",
             "gunzip -c | mariadb -uroot -p\"$MARIADB_ROOT_PASSWORD\" l2start" }, stdin: fs, ct: ct);
         if (!r.Ok) throw new LauncherException("restore_failed", r.Stderr.Trim());
     }

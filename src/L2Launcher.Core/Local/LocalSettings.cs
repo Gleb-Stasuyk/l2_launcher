@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 namespace L2Launcher.Core.Local;
 
 /// <summary>Settings of the local server, stored in &lt;server&gt;\launcher-local.json (the source of truth);
-/// <see cref="LocalConfigWriter"/> turns them into settings.env, modules.env and overrides\game\config\*.ini. Applied on restart.</summary>
+/// <see cref="LocalConfigWriter"/> turns them into settings.env, modules.env and overrides[/solo]/game\config\*.ini. Applied on restart.</summary>
 public sealed class LocalSettings
 {
     // rates
@@ -166,13 +166,21 @@ public static class LocalConfigWriter
         };
     }
 
+    /// <summary>Host path for overrides/game/config (release: overrides/; git docker: overrides/solo/).</summary>
+    public static string OverridesConfigRoot(string folder)
+    {
+        var kind = DockerService.DetectKind(folder) ?? ServerPackageKind.Release;
+        return kind == ServerPackageKind.Dev
+            ? Path.Combine(folder, "overrides", "solo", "game", "config")
+            : Path.Combine(folder, "overrides", "game", "config");
+    }
     /// <summary>Writes every generated file into the server folder and saves launcher-local.json.</summary>
     public static void Apply(string folder, LocalSettings settings)
     {
         var s = settings.Normalized();
         IniKeys.SetFile(Path.Combine(folder, "settings.env"), SettingsEnv(s), "=");
         IniKeys.SetFile(Path.Combine(folder, "modules.env"), ModulesEnv(s), "=");
-        var cfg = Path.Combine(folder, "overrides", "game", "config");
+        var cfg = OverridesConfigRoot(folder);
         foreach (var (rel, keys) in IniOverrides(s)) IniKeys.SetFile(Path.Combine(cfg, rel), keys);
         s.Save(folder);
     }

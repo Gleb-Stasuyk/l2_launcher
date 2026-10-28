@@ -90,7 +90,7 @@ public sealed class Loc : INotifyPropertyChanged
         ["L_Logs"] = ("Server log", "Лог сервера"),
         ["L_NoFolder"] = ("Choose the folder of the local server (where docker-compose.yml is).", "Выберите папку локального сервера (где лежит docker-compose.yml)."),
         ["L_PickFolder"] = ("Local server folder", "Папка локального сервера"),
-        ["L_NotServerFolder"] = ("This is not a L2Start local server folder (no docker-compose.yml of l2start-local).", "Это не папка локального сервера L2Start (нет docker-compose.yml l2start-local)."),
+        ["L_NotServerFolder"] = ("This is not a L2Start server folder (need docker-compose.yml with name: l2start-local or name: l2s).", "Это не папка сервера L2Start (нужен docker-compose.yml с name: l2start-local или name: l2s)."),
         ["L_DockerMissing"] = ("Docker Desktop is not installed. Open the download page?", "Docker Desktop не установлен. Открыть страницу загрузки?"),
         ["L_State_DockerMissing"] = ("Docker Desktop is not installed.", "Docker Desktop не установлен."),
         ["L_State_DockerNotRunning"] = ("Docker Desktop is not running. Start it and try again.", "Docker Desktop не запущен. Запустите его и повторите."),

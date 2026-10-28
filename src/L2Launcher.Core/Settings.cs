@@ -29,7 +29,7 @@ public sealed class UserPrefs
     public string Language { get; set; } = "";
     /// <summary>Selected server id from manifest.servers ("" = manifest default).</summary>
     public string Server { get; set; } = "";
-    /// <summary>Folder of the local server package (docker-compose.yml of l2start-local).</summary>
+    /// <summary>Folder of the local server package (docker-compose.yml: l2start-local release or l2s git docker/).</summary>
     public string ServerFolder { get; set; } = "";
     /// <summary>Start the local server when the launcher starts.</summary>
     public bool AutostartServer { get; set; } = false;

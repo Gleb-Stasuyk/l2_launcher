@@ -34,6 +34,18 @@ public class LocalTests
         return d;
     }
 
+    static string DevServerFolder(bool withSoloEnv = true)
+    {
+        var d = TempDir();
+        File.WriteAllText(Path.Combine(d, "docker-compose.yml"), "name: l2s\n");
+        if (withSoloEnv)
+        {
+            Directory.CreateDirectory(Path.Combine(d, "profiles"));
+            File.WriteAllText(Path.Combine(d, "profiles", "solo.env"), "L2S_DB_PASSWORD=test\n");
+        }
+        return d;
+    }
+
     [Theory]
     [InlineData("running|healthy", ServerState.Running)]
     [InlineData("running|starting", ServerState.Starting)]
@@ -75,6 +87,50 @@ public class LocalTests
         Assert.True(DockerService.IsServerFolder(ServerFolder()));
         Assert.False(DockerService.IsServerFolder(TempDir()));
         Assert.False(DockerService.IsServerFolder(""));
+    }
+
+    [Fact]
+    public void DetectsReleaseAndDevFolders()
+    {
+        Assert.Equal(ServerPackageKind.Release, DockerService.DetectKind(ServerFolder()));
+        Assert.Equal(ServerPackageKind.Dev, DockerService.DetectKind(DevServerFolder()));
+        Assert.Null(DockerService.DetectKind(TempDir()));
+        Assert.True(DockerService.IsServerFolder(DevServerFolder()));
+    }
+
+    [Fact]
+    public async Task DevUpPassesSoloEnvFile()
+    {
+        var f = new FakeRunner();
+        var dir = DevServerFolder();
+        await new DockerService(f, dir).UpAsync(recreate: false);
+        Assert.Equal("compose --env-file profiles\\solo.env up -d", f.Calls[0].args.Replace('/', '\\'));
+        Assert.Equal(dir, f.Calls[0].dir);
+    }
+
+    [Fact]
+    public async Task DevInspectsL2sGameContainer()
+    {
+        var f = new FakeRunner { Answer = a => new ProcResult(0, a.StartsWith("version") ? "27.0" : (a.Contains("l2s-game") ? "running|healthy" : "missing"), "") };
+        Assert.Equal(ServerState.Running, await new DockerService(f, DevServerFolder()).GetStateAsync());
+        Assert.Contains(f.Calls, c => c.args.Contains("l2s-game"));
+    }
+
+    [Fact]
+    public void WriterUsesSoloOverridesForDev()
+    {
+        var dir = DevServerFolder();
+        LocalConfigWriter.Apply(dir, new LocalSettings { RateXp = 11 });
+        Assert.True(File.Exists(Path.Combine(dir, "overrides", "solo", "game", "config", "Rates.ini")));
+        Assert.False(File.Exists(Path.Combine(dir, "overrides", "game", "config", "Rates.ini")));
+    }
+
+    [Fact]
+    public async Task DbServiceUsesMatchingContainer()
+    {
+        var f = new FakeRunner { Answer = _ => new ProcResult(0, "Hero\t80\t100\tadmin\t0\n", "") };
+        await new DbService(f, DevServerFolder()).ListCharactersAsync();
+        Assert.Contains(f.Calls, c => c.args.Contains("l2s-db"));
     }
 
     [Fact]
@@ -143,27 +199,27 @@ public class LocalTests
     {
         // both off -> CustomCommunityBoard=False
         var both_off = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = false, GmShop = false });
-        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
-        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
-        Assert.Equal("False", both_off["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+        Assert.Equal("False", both_off[Path.Combine("Custom", "CommunityBoard.ini")]["CustomCommunityBoard"]);
+        Assert.Equal("False", both_off[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableBuffs"]);
+        Assert.Equal("False", both_off[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableMultisells"]);
 
         // buffer on -> CustomCommunityBoard=True
         var buff_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = true, GmShop = false });
-        Assert.Equal("True", buff_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
-        Assert.Equal("True", buff_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
-        Assert.Equal("False", buff_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+        Assert.Equal("True", buff_on[Path.Combine("Custom", "CommunityBoard.ini")]["CustomCommunityBoard"]);
+        Assert.Equal("True", buff_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableBuffs"]);
+        Assert.Equal("False", buff_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableMultisells"]);
 
         // shop on -> CustomCommunityBoard=True
         var shop_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = false, GmShop = true });
-        Assert.Equal("True", shop_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
-        Assert.Equal("False", shop_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
-        Assert.Equal("True", shop_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+        Assert.Equal("True", shop_on[Path.Combine("Custom", "CommunityBoard.ini")]["CustomCommunityBoard"]);
+        Assert.Equal("False", shop_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableBuffs"]);
+        Assert.Equal("True", shop_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableMultisells"]);
 
         // both on -> CustomCommunityBoard=True
         var both_on = LocalConfigWriter.IniOverrides(new LocalSettings { CommunityBuffer = true, GmShop = true });
-        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CustomCommunityBoard"]);
-        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CommunityEnableBuffs"]);
-        Assert.Equal("True", both_on["Custom/CommunityBoard.ini"]["CommunityEnableMultisells"]);
+        Assert.Equal("True", both_on[Path.Combine("Custom", "CommunityBoard.ini")]["CustomCommunityBoard"]);
+        Assert.Equal("True", both_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableBuffs"]);
+        Assert.Equal("True", both_on[Path.Combine("Custom", "CommunityBoard.ini")]["CommunityEnableMultisells"]);
     }
 
 
