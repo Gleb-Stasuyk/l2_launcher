@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -43,7 +44,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Detail = Loc.F("S_Resume", name, attempt, max);
         };
         _session = new LauncherSession(CheckCoreAsync, LaunchCoreAsync);
-        PlayCommand = new RelayCommand(() => RunBusy(ct => _session.PlayAsync(ct)), () => !Busy);
+        Local = new LocalViewModel(this);
+        // The remote server (L2Start) is offline for now: Play always goes to the local server.
+        PlayCommand = new RelayCommand(() => RunBusy(ct => PlayLocalAsync(ct)), () => !Busy);
         CheckCommand = new RelayCommand(() => RunBusy(ct => _session.CheckFilesAsync(ct)), () => !Busy);
         CancelCommand = new RelayCommand(() => { _cts?.Cancel(); return Task.CompletedTask; }, () => Busy);
         OpenFolderCommand = new RelayCommand(() => { OpenShell(_cfg.GamePath); return Task.CompletedTask; });
@@ -52,6 +55,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     // ------------------------------------------------------------------ bindable state
+    public LocalViewModel Local { get; }
+    internal UserPrefs Prefs => _prefs;
+    internal Task RunBusyPublic(Func<CancellationToken, Task<bool>> a) => RunBusy(a);
+    internal void OpenShellPublic(string target) => OpenShell(target);
+    /// <summary>Local mode is always available; the remote L2Start server is shown greyed out while its VPS is off.</summary>
+    public bool RemoteAvailable => false;
+    public bool LocalMode => true;
     public ICommand PlayCommand { get; }
     public ICommand CheckCommand { get; }
     public ICommand CancelCommand { get; }
@@ -85,6 +95,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             Loc.SetRussian(ru);
             RefreshServerNames();
+            Local.RefreshLoc();
             _prefs.Language = ru ? "ru" : "en";
             Settings.SavePrefs(_prefs);
             AddLog($"Language -> {_prefs.Language}");
@@ -130,8 +141,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         foreach (var w in warnings) AddLog("WARN " + w);
         if (PathSafety.LooksLikeLineageClient(_cfg.GamePath) == false)
             AddLog("No system\\l2.exe in game path yet: a full download will be performed.");
-        // No automatic check at startup: files are checked on "Check files", or on "Play" if not yet checked this session.
-        Status = Loc["S_Idle"];
+        Local.Init();
+        AddLog($"Local server folder: {(_prefs.ServerFolder.Length > 0 ? _prefs.ServerFolder : "(not set)")}");
+        Status = Local.FolderValid ? Loc["L_Idle"] : Loc["L_NoFolder"];
+        if (Local.FolderValid)
+        {
+            if (_prefs.AutostartServer) _ = RunBusy(async ct => await Local.EnsureRunningAsync(false, ct));
+            else _ = RunBusy(async ct => { await Local.RefreshStateAsync(ct); return true; });
+        }
         await Task.CompletedTask;
     }
 
@@ -302,6 +319,40 @@ public sealed class MainViewModel : INotifyPropertyChanged
             AddLog($"ERROR [{ex.Code}] {ex.Message}");
             var key = "E_" + ex.Code;
             Status = Loc[key] == key ? Loc.F("S_Error", ex.Message) : Loc[key];
+        }
+    }
+
+    // ------------------------------------------------------------------ local play
+    private async Task<bool> PlayLocalAsync(CancellationToken ct)
+    {
+        if (!Local.FolderValid) { Status = Loc["L_NoFolder"]; return false; }
+        if (!await Local.EnsureRunningAsync(false, ct)) return false;
+        var patch = Path.Combine(Settings.ExeDir, Core.Local.ClientPatch.FileName);
+        if (File.Exists(patch))
+        {
+            Status = Loc["L_Patching"];
+            var lang = IsRussian ? "ru" : "en";
+            var n = await Task.Run(() => Core.Local.ClientPatch.Apply(_cfg.GamePath, patch, lang, AddLog), ct);
+            AddLog($"Client patch ({lang}): {n} file(s) updated");
+        }
+        else AddLog($"WARN no {Core.Local.ClientPatch.FileName} next to the launcher: system\\l2.ini is not switched to 127.0.0.1");
+        try { if (OptionIni.EnsureIsNativeFalse(_cfg.GamePath)) AddLog("Option.ini: [Game] IsNative=False set"); }
+        catch (Exception ex) { AddLog("WARN cannot update Option.ini: " + ex.Message); }
+        try
+        {
+            Status = Loc["S_Launching"];
+            var p = GameStarter.Start(_cfg);
+            AddLog($"Started {_cfg.GameExecutable} pid={p.Id}");
+            if (_cfg.CloseOnLaunch) Application.Current.Shutdown();
+            else Application.Current.MainWindow.WindowState = WindowState.Minimized;
+            return true;
+        }
+        catch (LauncherException ex)
+        {
+            AddLog($"ERROR [{ex.Code}] {ex.Message}");
+            var key = "E_" + ex.Code;
+            Status = Loc[key] == key ? Loc.F("S_Error", ex.Message) : Loc[key];
+            return false;
         }
     }
 
