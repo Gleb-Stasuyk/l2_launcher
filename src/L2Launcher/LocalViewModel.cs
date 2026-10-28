@@ -170,7 +170,7 @@ public sealed class LocalViewModel : INotifyPropertyChanged
         if (!FolderValid) { _main.Status = Loc["L_NoFolder"]; return; }
         LocalConfigWriter.Apply(Folder, S);
         S = LocalSettings.Load(Folder); // normalized values back into the UI
-        _main.AddLog("Settings written: settings.env, modules.env, overrides\\game\\config");
+        _main.AddLog("Settings written: settings.env, modules.env, " + LocalConfigWriter.OverridesConfigRoot(Folder));
         await EnsureRunningAsync(recreate: true, ct);
     }
 
@@ -240,7 +240,7 @@ public sealed class LocalViewModel : INotifyPropertyChanged
         if (MessageBox.Show(Loc["L_RestoreConfirm"], "L2Start", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         if (await DoBackupAsync(ct) == null) return;
         _main.Indeterminate = true; _main.Status = Loc["L_Restoring"];
-        Log(await _run.RunAsync("docker", new[] { "compose", "stop", "game", "login" }, Folder, ct: ct), "stop game");
+        Log(await Docker.StopServicesAsync(ct, "game", "login"), "stop game");
         try { await Db.RestoreAsync(d.FileName, ct); _main.AddLog("Restored " + d.FileName); }
         catch (LauncherException ex) { _main.Status = Loc.F("S_Error", ex.Message); return; }
         finally { _main.Indeterminate = false; }
