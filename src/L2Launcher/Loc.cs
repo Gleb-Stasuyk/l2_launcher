@@ -155,5 +155,16 @@ public sealed class Loc : INotifyPropertyChanged
         ["L_RestoreConfirm"] = ("Replace the current world with this backup? A backup of the current world is made first.", "Заменить текущий мир этим бэкапом? Сначала будет сделан бэкап текущего."),
         ["L_ResetConfirm"] = ("Delete ALL characters and start a clean world? A backup is made first.", "Удалить ВСЕХ персонажей и начать чистый мир? Сначала будет сделан бэкап."),
         ["GateDenied"] = ("Access denied: {0}", "Доступ запрещён: {0}"),
+        ["U_Available"] = ("Launcher {0} is available", "Доступна версия лаунчера {0}"),
+        ["U_Update"] = ("Update", "Обновить"),
+        ["U_Failed"] = ("Launcher update failed: {0}", "Не удалось обновить лаунчер: {0}"),
+        ["L_SrvVer"] = ("Server version", "Версия сервера"),
+        ["V_Checking"] = ("Checking the server version…", "Проверка версии сервера…"),
+        ["V_UpToDate"] = ("Server {0}: up to date (latest {1})", "Сервер {0}: актуальный (последний {1})"),
+        ["V_Outdated"] = ("Server {0}: outdated, latest {1}", "Сервер {0}: устарел, последний {1}"),
+        ["V_Newer"] = ("Server {0}: newer than the latest release {1}", "Сервер {0}: новее последнего релиза {1}"),
+        ["V_Unknown"] = ("Server version unknown ({0}, dev build?), latest {1}", "Версия сервера неизвестна ({0}, dev-сборка?), последний {1}"),
+        ["V_Offline"] = ("Server {0}: cannot reach GitHub", "Сервер {0}: нет связи с GitHub"),
+        ["V_RateLimited"] = ("Server {0}: GitHub limit reached, try after {1}", "Сервер {0}: лимит GitHub, попробуйте после {1}"),
     };
 }
