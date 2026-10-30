@@ -52,10 +52,55 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OpenFolderCommand = new RelayCommand(() => { OpenShell(_cfg.GamePath); return Task.CompletedTask; });
         WebsiteCommand = new RelayCommand(() => { OpenShell(_cfg.WebsiteUrl); return Task.CompletedTask; }, () => Settings.IsHttps(_cfg.WebsiteUrl));
         ToggleLogCommand = new RelayCommand(() => { LogVisible = !LogVisible; return Task.CompletedTask; });
+        UpdateLauncherCommand = new RelayCommand(() => RunBusy(UpdateLauncherAsync), () => !Busy && LauncherUpdateVisible);
     }
 
     // ------------------------------------------------------------------ bindable state
     public LocalViewModel Local { get; }
+    internal HttpClient Http => _http;
+
+    // ------------------------------------------------------------------ launcher update from GitHub releases
+    private GhRelease? _launcherRelease;
+    private string _launcherUpdateText = "";
+    public string LauncherUpdateText { get => _launcherUpdateText; set { _launcherUpdateText = value; On(); } }
+    private bool _launcherUpdateVisible;
+    public bool LauncherUpdateVisible { get => _launcherUpdateVisible; set { _launcherUpdateVisible = value; On(); } }
+    public ICommand? UpdateLauncherCommand { get; private set; }
+
+    /// <summary>Startup, non-blocking: latest l2_launcher release vs the running version; newer = banner + «Обновить».</summary>
+    private async Task CheckLauncherReleaseAsync()
+    {
+        try
+        {
+            var res = await new GitHubReleases(_http).LatestAsync(GitHubReleases.LauncherRepo, null, CancellationToken.None);
+            if (res.Status != GhStatus.Ok || res.Release?.Version is not { } v)
+            {
+                AddLog($"Launcher release check: {res.Status} {res.Message}");
+                return;
+            }
+            AddLog($"Launcher release check: latest {res.Release.Tag}, running {CurrentVersion.ToString(3)}");
+            if (GitHubReleases.Compare(v, CurrentVersion) <= 0) return;
+            _launcherRelease = res.Release;
+            LauncherUpdateText = Loc.F("U_Available", v.ToString(3));
+            LauncherUpdateVisible = true;
+        }
+        catch (Exception ex) { AddLog("Launcher release check failed: " + ex.Message); }
+    }
+
+    private async Task<bool> UpdateLauncherAsync(CancellationToken ct)
+    {
+        if (_launcherRelease is not { } r) return false;
+        var exe = Environment.ProcessPath;
+        if (exe == null || !exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) { Status = Loc.F("U_Failed", "not a published exe"); return false; }
+        Indeterminate = true;
+        Status = Loc.F("S_SelfUpdate", r.Version!.ToString(3));
+        var (started, why) = await new LauncherUpdater(_svc).TryUpdateFromGitHubAsync(r, CurrentVersion, exe, ct);
+        Indeterminate = false;
+        if (started) { Application.Current.Shutdown(); return true; }
+        AddLog("GitHub self-update skipped: " + why);
+        Status = Loc.F("U_Failed", why ?? "");
+        return false;
+    }
     internal UserPrefs Prefs => _prefs;
     internal Task RunBusyPublic(Func<CancellationToken, Task<bool>> a) => RunBusy(a);
     internal void OpenShellPublic(string target) => OpenShell(target);
@@ -149,6 +194,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (_prefs.AutostartServer) _ = RunBusy(async ct => await Local.EnsureRunningAsync(false, ct));
             else _ = RunBusy(async ct => { await Local.RefreshStateAsync(ct); return true; });
         }
+        _ = CheckLauncherReleaseAsync(); // non-blocking, fails soft offline / rate-limited
         await Task.CompletedTask;
     }
 

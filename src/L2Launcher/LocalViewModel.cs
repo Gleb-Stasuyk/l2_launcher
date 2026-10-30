@@ -37,6 +37,7 @@ public sealed class LocalViewModel : INotifyPropertyChanged
         RestoreCommand = Busy(RestoreAsync);
         ResetCommand = Busy(ResetAsync);
         InstallCommand = Busy(InstallAsync);
+        ServerVersionCommand = new RelayCommand(() => CheckServerVersionAsync(CancellationToken.None));
         OpenFolderCommand = new RelayCommand(() => { _main.OpenShellPublic(Folder); return Task.CompletedTask; }, () => FolderValid);
     }
 
@@ -57,6 +58,34 @@ public sealed class LocalViewModel : INotifyPropertyChanged
     public ICommand ResetCommand { get; }
     public ICommand InstallCommand { get; }
     public ICommand OpenFolderCommand { get; }
+    public ICommand ServerVersionCommand { get; }
+
+    private string _serverVersionText = "";
+    /// <summary>«Версия сервера»: local vs the latest l2start-server release.</summary>
+    public string ServerVersionText { get => _serverVersionText; set { _serverVersionText = value; On(); } }
+
+    private async Task CheckServerVersionAsync(CancellationToken ct)
+    {
+        ServerVersionText = Loc["V_Checking"];
+        var res = await new GitHubReleases(_main.Http).LatestAsync(GitHubReleases.ServerRepo, GitHubReleases.ServerTagPrefix, ct);
+        string? local = null;
+        if (FolderValid)
+        {
+            try { local = await ServerVersion.LocalAsync(_run, Docker, ct); } catch (OperationCanceledException) { throw; } catch { }
+        }
+        var localText = string.IsNullOrWhiteSpace(local) ? "?" : local!;
+        if (res.Status == GhStatus.RateLimited) { ServerVersionText = Loc.F("V_RateLimited", localText, res.Message ?? "?"); return; }
+        if (res.Status != GhStatus.Ok) { ServerVersionText = Loc.F("V_Offline", localText); return; }
+        var remote = res.Release!.Version!.ToString(3);
+        ServerVersionText = ServerVersion.Compare(local, res.Release.Version) switch
+        {
+            VersionCompare.UpToDate => Loc.F("V_UpToDate", localText, remote),
+            VersionCompare.Outdated => Loc.F("V_Outdated", localText, remote),
+            VersionCompare.Newer => Loc.F("V_Newer", localText, remote),
+            _ => Loc.F("V_Unknown", localText, remote),
+        };
+        _main.AddLog($"Server version: local={localText} latest={res.Release.Tag}");
+    }
 
     public string Folder => Prefs.ServerFolder;
     public bool FolderValid => DockerService.IsServerFolder(Folder);
@@ -88,6 +117,7 @@ public sealed class LocalViewModel : INotifyPropertyChanged
     {
         if (FolderValid) S = LocalSettings.Load(Folder);
         On(nameof(Folder)); On(nameof(FolderValid)); On(nameof(StateText));
+        if (FolderValid) _ = CheckServerVersionAsync(CancellationToken.None); // auto once, fails soft
     }
 
     public void RefreshLoc() => On(nameof(StateText));

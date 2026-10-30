@@ -55,6 +55,31 @@ public sealed class LauncherUpdater
         return true;
     }
 
+    /// <summary>
+    /// Self-update from the latest GitHub release (public API): asset L2Launcher.exe from
+    /// https://github.com/Gleb-Stasuyk/l2_launcher/releases/download/..., must be newer than the running version and not
+    /// below the highest seen, size + sha256 (the asset digest GitHub publishes) must match. True = the replacement was
+    /// started, the caller exits.
+    /// </summary>
+    public async Task<(bool started, string? why)> TryUpdateFromGitHubAsync(GhRelease r, Version current, string currentExePath, CancellationToken ct)
+    {
+        if (r.Version == null || GitHubReleases.Compare(r.Version, current) <= 0) return (false, "not newer");
+        var highest = VersionStore.ReadHighest();
+        if (highest != null && GitHubReleases.Compare(r.Version, highest) < 0) return (false, "rollback");
+        var a = r.Assets.FirstOrDefault(x => string.Equals(x.Name, GitHubReleases.LauncherAsset, StringComparison.OrdinalIgnoreCase));
+        if (a == null) return (false, "no " + GitHubReleases.LauncherAsset + " in the release");
+        if (!GitHubReleases.IsTrustedAssetUrl(a.Url, GitHubReleases.LauncherRepo)) return (false, "untrusted url");
+        if (!FileIntegrity.IsSha256Hex(a.Sha256)) return (false, "no sha256 digest");
+        var newExe = currentExePath + ".new";
+        try { await _svc.DownloadOneAsync(a.Url, newExe, a.Sha256!, a.Size, null, ct); }
+        catch (OperationCanceledException) { UpdateService.TryDelete(newExe); throw; }
+        catch (Exception ex) { UpdateService.TryDelete(newExe); return (false, ex.Message); }
+        VersionStore.Persist(r.Version.ToString());
+        if (!OperatingSystem.IsWindows()) return (false, "not windows");
+        SpawnReplaceAndRelaunch(currentExePath, newExe);
+        return (true, null);
+    }
+
     // A running exe cannot overwrite itself: a PowerShell script waits for this PID, swaps the files and relaunches.
     private static void SpawnReplaceAndRelaunch(string currentExe, string newExe)
     {
