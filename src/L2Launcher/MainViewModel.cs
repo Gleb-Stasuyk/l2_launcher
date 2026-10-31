@@ -352,6 +352,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 var n = await Task.Run(() => ServerService.Apply(_cfg.GamePath, m, sid, cache, AddLog), ct);
                 AddLog($"Server {sid} active ({n} file(s) copied)");
             }
+            var remoteSid = _manifest != null && ServerService.HasServers(_manifest) ? SelectedServer(_manifest) : "";
+            if (!string.IsNullOrWhiteSpace(_cfg.RemoteHost) && remoteSid != "local")
+            {
+                try
+                {
+                    AddLog(L2Ini.SetServerAddr(_cfg.GamePath, _cfg.RemoteHost.Trim())
+                        ? $"l2.ini: ServerAddr={_cfg.RemoteHost.Trim()}" : $"l2.ini: ServerAddr already {_cfg.RemoteHost.Trim()}");
+                }
+                catch (Exception ex) { AddLog("WARN cannot set l2.ini ServerAddr: " + ex.Message); }
+            }
             try { if (OptionIni.EnsureIsNativeFalse(_cfg.GamePath)) AddLog("Option.ini: [Game] IsNative=False set"); }
             catch (Exception ex) { AddLog("WARN cannot update Option.ini: " + ex.Message); }
             Status = Loc["S_Launching"];

@@ -21,6 +21,8 @@ public sealed class LauncherConfig
     public bool AllowOfflinePlay { get; set; } = false;
     public bool CloseOnLaunch { get; set; } = true;
     public string WebsiteUrl { get; set; } = BuildDefaults.WebsiteUrl;
+    /// <summary>Login server host written into system/l2.ini (ServerAddr) before a remote launch. Empty = keep the l2.ini from the manifest.</summary>
+    public string RemoteHost { get; set; } = BuildDefaults.RemoteHost;
 }
 
 /// <summary>Per-user preferences (%LOCALAPPDATA%\L2Launcher\prefs.json).</summary>
@@ -40,6 +42,8 @@ public static class BuildDefaults
     public const string ManifestUrl = "https://l2start.ru/updates/manifest.json";
     public const string ServerName = "L2Start";
     public const string WebsiteUrl = "https://l2start.ru";
+    /// <summary>L2Start VPS (login 2106, game 7777).</summary>
+    public const string RemoteHost = "89.104.70.159";
 }
 
 public static class Settings
