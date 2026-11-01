@@ -45,8 +45,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         };
         _session = new LauncherSession(CheckCoreAsync, LaunchCoreAsync);
         Local = new LocalViewModel(this);
-        // The remote server (L2Start) is offline for now: Play always goes to the local server.
-        PlayCommand = new RelayCommand(() => RunBusy(ct => PlayLocalAsync(ct)), () => !Busy);
+        // Remote (default) points system/l2.ini at RemoteHost and starts the installed client.
+        // Local still points it at 127.0.0.1 and starts the docker server.
+        PlayCommand = new RelayCommand(() => RunBusy(ct => LocalMode ? PlayLocalAsync(ct) : _session.PlayAsync(ct)), () => !Busy);
         CheckCommand = new RelayCommand(() => RunBusy(ct => _session.CheckFilesAsync(ct)), () => !Busy);
         CancelCommand = new RelayCommand(() => { _cts?.Cancel(); return Task.CompletedTask; }, () => Busy);
         OpenFolderCommand = new RelayCommand(() => { OpenShell(_cfg.GamePath); return Task.CompletedTask; });
@@ -104,10 +105,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
     internal UserPrefs Prefs => _prefs;
     internal Task RunBusyPublic(Func<CancellationToken, Task<bool>> a) => RunBusy(a);
     internal void OpenShellPublic(string target) => OpenShell(target);
-    /// <summary>Local mode is always available; the remote L2Start server is shown greyed out while its VPS is off.</summary>
-    public bool RemoteAvailable => false;
-    public bool LocalMode => true;
     public ICommand PlayCommand { get; }
+
+    private bool _localMode;
+    /// <summary>Local docker server. Remote (false) is the live L2Start server and the default.</summary>
+    public bool LocalMode
+    {
+        get => _localMode;
+        set
+        {
+            if (!value) { On(); return; }
+            if (_localMode) { On(); return; }
+            _localMode = true;
+            On();
+            On(nameof(RemoteMode));
+            if (!Busy) Status = Local.FolderValid ? Loc["L_Idle"] : Loc["L_NoFolder"];
+        }
+    }
+    public bool RemoteMode
+    {
+        get => !_localMode;
+        set
+        {
+            if (!value) { On(); return; }
+            if (!_localMode) { On(); return; }
+            _localMode = false;
+            On();
+            On(nameof(LocalMode));
+            if (!Busy) Status = Loc["S_Idle"];
+        }
+    }
     public ICommand CheckCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand OpenFolderCommand { get; }
@@ -188,7 +215,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             AddLog("No system\\l2.exe in game path yet: a full download will be performed.");
         Local.Init();
         AddLog($"Local server folder: {(_prefs.ServerFolder.Length > 0 ? _prefs.ServerFolder : "(not set)")}");
-        Status = Local.FolderValid ? Loc["L_Idle"] : Loc["L_NoFolder"];
+        AddLog(LocalMode ? "Mode: local (127.0.0.1)" : $"Mode: L2Start ({_cfg.RemoteHost})");
+        Status = LocalMode ? (Local.FolderValid ? Loc["L_Idle"] : Loc["L_NoFolder"]) : Loc["S_Idle"];
         if (Local.FolderValid)
         {
             if (_prefs.AutostartServer) _ = RunBusy(async ct => await Local.EnsureRunningAsync(false, ct));
@@ -352,13 +380,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 var n = await Task.Run(() => ServerService.Apply(_cfg.GamePath, m, sid, cache, AddLog), ct);
                 AddLog($"Server {sid} active ({n} file(s) copied)");
             }
-            var remoteSid = _manifest != null && ServerService.HasServers(_manifest) ? SelectedServer(_manifest) : "";
-            if (!string.IsNullOrWhiteSpace(_cfg.RemoteHost) && remoteSid != "local")
+            if (!string.IsNullOrWhiteSpace(_cfg.RemoteHost))
             {
                 try
                 {
-                    AddLog(L2Ini.SetServerAddr(_cfg.GamePath, _cfg.RemoteHost.Trim())
-                        ? $"l2.ini: ServerAddr={_cfg.RemoteHost.Trim()}" : $"l2.ini: ServerAddr already {_cfg.RemoteHost.Trim()}");
+                    var host = _cfg.RemoteHost.Trim();
+                    AddLog(L2Ini.SetServerAddr(_cfg.GamePath, host)
+                        ? $"l2.ini: ServerAddr={host}" : $"l2.ini: ServerAddr already {host}");
                 }
                 catch (Exception ex) { AddLog("WARN cannot set l2.ini ServerAddr: " + ex.Message); }
             }
@@ -391,7 +419,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             var n = await Task.Run(() => Core.Local.ClientPatch.Apply(_cfg.GamePath, patch, lang, AddLog), ct);
             AddLog($"Client patch ({lang}): {n} file(s) updated");
         }
-        else AddLog($"WARN no {Core.Local.ClientPatch.FileName} next to the launcher: system\\l2.ini is not switched to 127.0.0.1");
+        else AddLog($"WARN no {Core.Local.ClientPatch.FileName} next to the launcher");
+        try
+        {
+            AddLog(L2Ini.SetServerAddr(_cfg.GamePath, "127.0.0.1")
+                ? "l2.ini: ServerAddr=127.0.0.1" : "l2.ini: ServerAddr already 127.0.0.1");
+        }
+        catch (Exception ex) { AddLog("WARN cannot set l2.ini ServerAddr: " + ex.Message); }
         try { if (OptionIni.EnsureIsNativeFalse(_cfg.GamePath)) AddLog("Option.ini: [Game] IsNative=False set"); }
         catch (Exception ex) { AddLog("WARN cannot update Option.ini: " + ex.Message); }
         try
