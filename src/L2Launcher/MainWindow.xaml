@@ -49,9 +49,9 @@
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
                 <TextBlock Text="{Binding Loc[Server]}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Loc[ModeLocal]}" IsChecked="{Binding LocalMode, Mode=OneWay}" IsHitTestVisible="False"/>
-                <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Loc[ModeRemote]}" IsEnabled="{Binding RemoteAvailable}" IsChecked="False"
-                              ToolTipService.ShowOnDisabled="True" ToolTip="{Binding Loc[RemoteTip]}"/>
+                <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Loc[ModeLocal]}" IsChecked="{Binding LocalMode, Mode=TwoWay}" IsEnabled="{Binding NotBusy}"/>
+                <ToggleButton Style="{StaticResource LangBtn}" Content="{Binding Loc[ModeRemote]}" IsChecked="{Binding RemoteMode, Mode=TwoWay}" IsEnabled="{Binding NotBusy}"
+                              ToolTip="{Binding Loc[RemoteTip]}"/>
             </StackPanel>
             <StackPanel>
                 <TextBlock Text="{Binding Title}" FontSize="26" FontWeight="Bold" Foreground="{StaticResource Accent}"/>
