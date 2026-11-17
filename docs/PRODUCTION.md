@@ -11,7 +11,7 @@
 ## Publishing an update
 1. Update the reference client, then build (no key needed):
    `python build_manifest.py --client <ref client> --overlay <chat-fix localization.ini dir> --lang-ru <ru dir> --obsolete-enru
-    --server main=<dir with system/l2.ini for 80.78.246.62> --server local=<dir with system/l2.ini for 127.0.0.1>
+    --server main=<dir with system/l2.ini for game.l2start.ru> --server local=<dir with system/l2.ini for 127.0.0.1>
     --launcher-exe L2Launcher.exe --launcher-version X.Y.Z --version prod.YYYYMMDD.N --product L2Start --out <out> --no-link --unsigned`
 2. Sign on the offline machine holding `manifest_private.pem`: `python sign_manifest.py <out>/manifest.json --key manifest_private.pem`
    (needs `pip install cryptography`).
