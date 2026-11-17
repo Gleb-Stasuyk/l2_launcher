@@ -19,11 +19,11 @@ public class L2IniTests
         Directory.CreateDirectory(Path.Combine(dir, "system"));
         var ini = Path.Combine(dir, "system", "l2.ini");
         File.Copy(Sample, ini);
-        Assert.True(L2Ini.SetServerAddr(dir, "89.104.70.159"));
+        Assert.True(L2Ini.SetServerAddr(dir, "game.l2start.ru"));
         var raw = File.ReadAllBytes(ini);
         Assert.True(L2Ini.IsEncrypted(raw));
-        Assert.Equal("89.104.70.159", L2Ini.ReadServerAddr(L2Ini.Decode(raw)));
-        Assert.False(L2Ini.SetServerAddr(dir, "89.104.70.159"));
-        Assert.Equal(L2Ini.Decode(File.ReadAllBytes(Sample)).Length + 1, L2Ini.Decode(raw).Length);
+        Assert.Equal("game.l2start.ru", L2Ini.ReadServerAddr(L2Ini.Decode(raw)));
+        Assert.False(L2Ini.SetServerAddr(dir, "game.l2start.ru"));
+        Assert.Equal(L2Ini.Decode(File.ReadAllBytes(Sample)).Length + 3, L2Ini.Decode(raw).Length);
     }
 }

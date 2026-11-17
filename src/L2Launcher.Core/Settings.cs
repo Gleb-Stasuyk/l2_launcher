@@ -42,8 +42,10 @@ public static class BuildDefaults
     public const string ManifestUrl = "https://l2start.ru/updates/manifest.json";
     public const string ServerName = "L2Start";
     public const string WebsiteUrl = "https://l2start.ru";
-    /// <summary>L2Start VPS (login 2106, game 7777).</summary>
-    public const string RemoteHost = "89.104.70.159";
+    /// <summary>L2Start login server (2106; game 7777). A DNS name, so moving the VPS only needs a DNS change.</summary>
+    public const string RemoteHost = "game.l2start.ru";
+    /// <summary>Old VPS addresses. A launcher.json that still pins one of them is moved to RemoteHost.</summary>
+    public static readonly string[] LegacyRemoteHosts = { "89.104.70.159", "80.78.246.62" };
 }
 
 public static class Settings
@@ -81,6 +83,11 @@ public static class Settings
         {
             warnings.Add($"PreLaunchUrl must be https: '{cfg.PreLaunchUrl}' - disabled.");
             cfg.PreLaunchUrl = "";
+        }
+        if (Array.Exists(BuildDefaults.LegacyRemoteHosts, h => string.Equals(h, cfg.RemoteHost?.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            warnings.Add($"RemoteHost {cfg.RemoteHost} is an old server address - using {BuildDefaults.RemoteHost}.");
+            cfg.RemoteHost = BuildDefaults.RemoteHost;
         }
         if (string.IsNullOrWhiteSpace(cfg.GamePath)) cfg.GamePath = dir ?? ExeDir;
         else if (!Path.IsPathRooted(cfg.GamePath)) cfg.GamePath = Path.GetFullPath(Path.Combine(dir ?? ExeDir, cfg.GamePath));

@@ -86,6 +86,23 @@ public class SafetyTests
         File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"ManifestUrl\":\"http://127.0.0.1:8765/manifest.json\"}");
         Assert.Equal("http://127.0.0.1:8765/manifest.json", Settings.LoadConfig(dir).cfg.ManifestUrl);
     }
+
+    [Fact]
+    public void ConfigMovesLegacyRemoteHostToDnsName()
+    {
+        Assert.Equal("game.l2start.ru", BuildDefaults.RemoteHost);
+        var dir = Directory.CreateTempSubdirectory("l2cfg").FullName;
+        Assert.Equal(BuildDefaults.RemoteHost, Settings.LoadConfig(dir).cfg.RemoteHost);
+        foreach (var old in new[] { "89.104.70.159", "80.78.246.62" })
+        {
+            File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"RemoteHost\":\"" + old + "\"}");
+            Assert.Equal(BuildDefaults.RemoteHost, Settings.LoadConfig(dir).cfg.RemoteHost);
+        }
+        File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"RemoteHost\":\"10.0.0.5\"}");
+        Assert.Equal("10.0.0.5", Settings.LoadConfig(dir).cfg.RemoteHost);
+        File.WriteAllText(Path.Combine(dir, "launcher.json"), "{\"RemoteHost\":\"\"}");
+        Assert.Equal("", Settings.LoadConfig(dir).cfg.RemoteHost);
+    }
 }
 
 /// <summary>
